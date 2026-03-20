@@ -379,6 +379,11 @@
 
         let activeVideoId = null;
         let pollInterval = null;
+        
+        // Pagination state Node creations
+        let currentSegments = [];
+        let currentSegmentsPage = 1;
+        const itemsPerPage = 6;
 
         function startSample() {
             // Trigger sample API
@@ -529,18 +534,29 @@
             }, 1000);
         }
 
-        function renderSegments(metadata) {
+        function renderSegments(metadata, resetPage = true) {
              const segmentsSection = document.getElementById('segments-section');
              const segmentsGrid = document.getElementById('segments-grid');
              const segmentCount = document.getElementById('segment-count');
 
              if (!segmentsSection || !segmentsGrid) return;
 
+             if (resetPage) {
+                  currentSegments = metadata;
+                  currentSegmentsPage = 1;
+             }
+
              segmentsSection.style.display = 'block';
              segmentsGrid.innerHTML = '';
-             segmentCount.textContent = `${metadata.length} Clips`;
+             segmentCount.innerHTML = `전체 세그먼트: ${currentSegments.length} 개 (Page ${currentSegmentsPage})`;
 
-             metadata.forEach(seg => {
+             // Slice array Node creations layout Node.
+             const start = (currentSegmentsPage - 1) * itemsPerPage;
+             const end = currentSegmentsPage * itemsPerPage;
+             const pageData = currentSegments.slice(start, end);
+
+             // Render cards Node creations layout Node.
+             pageData.forEach(seg => {
                   const card = document.createElement('div');
                   card.className = "video-card";
                   card.innerHTML = `
@@ -550,24 +566,48 @@
                        <div class="card-content" style="padding: 0.8rem;">
                            <div class="time-markers">${seg.start_time.toFixed(1)}s - ${seg.end_time.toFixed(1)}s</div>
                            <h4 style="font-size: 0.85rem;">Segment ${seg.index + 1}</h4>
-                           <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.4rem; font-family: monospace;">
-                               Video Embeds: [${seg.dimensions} dims]
-                           </div>
-                           <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; font-family: monospace;">
-                               Text Embeds: [${seg.text_dimensions || 0} dims]
-                           </div>
-                           <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.6rem; line-height: 1.3;">
+                           <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.6rem; line-height: 1.3; max-height: 3.6rem; overflow-y: auto;">
                                💡 ${seg.description || 'No description available'}
                            </div>
                        </div>
-
-
                   `;
                   segmentsGrid.appendChild(card);
              });
-             
-             // Smooth Scroll to segments
-             segmentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+             // Append Pagination Buttons Node creations Node layout Node correctly
+             const totalPages = Math.ceil(currentSegments.length / itemsPerPage);
+             if (totalPages > 1) {
+                  const paginationDiv = document.createElement('div');
+                  paginationDiv.style.cssText = "display: flex; gap: 0.8rem; justify-content: center; margin-top: 1.5rem; align-items: center; grid-column: 1 / -1; width: 100%;";
+                  
+                  const btnPrev = document.createElement('button');
+                  btnPrev.textContent = "Previous";
+                  btnPrev.onclick = () => { if (currentSegmentsPage > 1) { currentSegmentsPage--; renderSegments(currentSegments, false); } };
+                  btnPrev.disabled = currentSegmentsPage === 1;
+
+                  const label = document.createElement('span');
+                  label.textContent = `${currentSegmentsPage} / ${totalPages}`;
+
+                  const btnNext = document.createElement('button');
+                  btnNext.textContent = "Next";
+                  btnNext.onclick = () => { if (currentSegmentsPage < totalPages) { currentSegmentsPage++; renderSegments(currentSegments, false); } };
+                  btnNext.disabled = currentSegmentsPage === totalPages;
+
+                  const btnStyle = "padding: 0.4rem 0.8rem; background: #1E293B; border: 1px solid #334155; border-radius: 8px; color: #F8FAFC; cursor: pointer;";
+                  [btnPrev, btnNext].forEach(b => {
+                       b.style.cssText = btnStyle;
+                       if (b.disabled) b.style.opacity = "0.4";
+                  });
+
+                  paginationDiv.appendChild(btnPrev);
+                  paginationDiv.appendChild(label);
+                  paginationDiv.appendChild(btnNext);
+                  segmentsGrid.appendChild(paginationDiv);
+             }
+
+             if (resetPage) {
+                  segmentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+             }
         }
 
 
