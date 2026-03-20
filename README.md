@@ -1,3 +1,5 @@
+[🌐 English Version](README_EN.md)
+
 # 🌌 Scene Intelligence - Multimodal Video Semantic Search
 
 > **구글 Vertex AI 및 Gemini Embedding**을 기반으로 한 하이브리드 비디오 시맨틱(의미형) 검색 엔진 대시보드입니다.  
