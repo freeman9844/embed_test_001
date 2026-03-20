@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multimodal Video Search | Gemini Embedding 2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #F8F9FA;
+            --surface: #FFFFFF;
+            --border: #DADCE0;
+            --primary: #1A73E8;
+            --secondary: #185ABC;
+            --accent: #E8F0FE;
+            --text-main: #202124;
+            --text-muted: #5F6368;
+            --shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 3rem 1.5rem;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        header {
+            margin-bottom: 2.5rem;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1rem;
+        }
+
+        /* Grid Layout */
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 900px) {
+            .grid-container { grid-template-columns: 1fr; }
+        }
+
+        /* Google Style Cards */
+        .glass-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.2s ease;
+        }
+
+        .glass-card:hover { 
+            box-shadow: 0 4px 6px 0 rgba(60,64,67,0.30), 0 4px 10px 4px rgba(60,64,67,0.15); 
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            position: relative;
+            background: #F8F9FA;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--primary);
+            background: var(--accent);
+        }
+
+        .upload-icon {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+        }
+
+        .upload-zone h3 { margin-bottom: 0.25rem; font-size: 1.1rem; color: var(--text-main); }
+        .upload-zone p { font-size: 0.85rem; color: var(--text-muted); }
+
+        #file-input { display: none; }
+
+        /* Processing Dashboard */
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .status-header h2 { font-size: 1.1rem; color: var(--text-main); font-weight: 600;}
+
+        .badge {
+            background: #E6F4EA;
+            color: #137333;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .progress-bar-container {
+            background: #E8EAED;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-bar-fill {
+            background: var(--primary);
+            width: 0%;
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.4s ease;
+        }
+
+        .logs-container {
+            background: #F1F3F4;
+            border-radius: 8px;
+            padding: 0.75rem;
+            height: 120px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+
+        /* Search Section */
+        .search-box {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .search-input-wrapper i {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .search-box input {
+            width: 100%;
+            background: #F1F3F4;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            padding: 10px 10px 10px 2.5rem;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            outline: none;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .search-box input:focus {
+            background: #FFFFFF;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+
+        .search-btn {
+            background: var(--primary);
+            border: none;
+            color: #ffffff;
+            font-weight: 600;
+            padding: 0 1.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .search-btn:hover { background: var(--secondary); }
+
+        /* Results Feeding Grid */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .video-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+
+        .video-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .card-cover {
+            height: 140px;
+            background: #F1F3F4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .card-content { padding: 1rem; }
+
+        .time-markers {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .card-content h4 {
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .score-indicator {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(32, 33, 36, 0.85);
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 0.65rem;
+            color: #FFFFFF;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar Deleted -->
+
+    <!-- Main View -->
+    <div class="main-content">
+        <header>
+            <h1>Scene Intelligence</h1>
+            <p>Multimodal Video Semantic Search using Vertex AI and Gemini Embedding 2</p>
+        </header>
+
+        <div class="grid-container">
+            <!-- Part 1: Upload & Indexing -->
+            <div class="glass-card">
+                <div class="status-header">
+                    <h2>Upload Video</h2>
+                    <span class="badge" id="active-status">Idle</span>
+                </div>
+                
+                <div class="upload-zone" id="drop-zone">
+                    <i class="fa-solid fa-circle-arrow-up upload-icon"></i>
+                    <h3>Drag & Drop video file here</h3>
+                    <p>Supports MP4 and MOV (Auto splits to 10s chunks)</p>
+                    <input type="file" id="file-input" accept="video/mp4,video/quicktime">
+                </div>
+
+                <div class="sample-zone" style="text-align: center; margin-top: 1.25rem;">
+                     <button onclick="startSample()" class="search-btn" style="background: #E8F0FE; color: #1A73E8; font-weight: 800; margin: 0 auto; box-shadow: 0 4px 12px rgba(26,115,232,0.15); border-radius: 20px;">
+                          <i class="fa-solid fa-vial"></i> 🧪 샘플 비디오로 즉시 가동하기
+                     </button>
+                </div>
+
+                <div id="progress-container" style="display: none; margin-top: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem;">
+                        <span id="progress-text">Processing segments...</span>
+                        <span id="percent-val">0%</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar-fill" id="progress-bar"></div>
+                    </div>
+                    
+                    <div class="logs-container" id="logs-panel">
+                        <!-- Polling Logs pop-in -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Part 2: Search Box index items -->
+            <div class="glass-card">
+                <h2>Vector Search</h2>
+                <div class="search-box">
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="query-input" placeholder="Query: 'A person feeding a dog on a grass field'">
+                    </div>
+                    <button class="search-btn" onclick="triggerSearch()">
+                        <i class="fa-solid fa-sparkles"></i> Search
+                    </button>
+                </div>
+
+                <h3>Top Matches</h3>
+                <div class="results-grid" id="results-grid">
+                    <!-- Dynamic rendering outputs -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Indexed Segments Section -->
+        <div class="glass-card" style="margin-top: 2rem; display: none; grid-column: span 2;" id="segments-section">
+            <div class="status-header">
+                <h2>Indexed Video Clips</h2>
+                <span class="badge" id="segment-count">0 Clips</span>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+               Below are the 10-second clips saved, along with dimensions retrieved from multimodal embeddings.
+            </p>
+            <div class="results-grid" id="segments-grid">
+                <!-- Dynamic rendering outputs -->
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const percentVal = document.getElementById('percent-val');
+        const logsPanel = document.getElementById('logs-panel');
+        const activeStatus = document.getElementById('active-status');
+        const resultsGrid = document.getElementById('results-grid');
+
+        let activeVideoId = null;
+        let pollInterval = null;
+
+        function startSample() {
+            // Trigger sample API
+            activeStatus.innerText = "Queued";
+            progressContainer.style.display = "block";
+            const oldSegments = document.getElementById('segments-section');
+            if (oldSegments) oldSegments.style.display = 'none';
+            logsPanel.innerHTML = "<div>[System] Requesting sample video setup...</div>";
+            
+            fetch('/api/sample', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.video_id) {
+                    activeVideoId = data.video_id;
+                    logsPanel.innerHTML += "<div>[System] Sample Queued. Starting monitoring...</div>";
+                    startPolling(data.video_id);
+                } else {
+                    alert("샘플 가동 요청 실패");
+                }
+            })
+            .catch(err => {
+                logsPanel.innerHTML += `<div style="color:red">[Error] ${err}</div>`;
+            });
+        }
+
+        // Trigger Click Upload
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        // File Selection setup
+        fileInput.addEventListener('change', (e) => {
+             if (e.target.files.length > 0) handleUpload(e.target.files[0]);
+        });
+
+        // Drag & Drop event wrappers
+        ['dragenter', 'dragover'].forEach(name => {
+             dropZone.addEventListener(name, (e) => {
+                 e.preventDefault();
+                 dropZone.classList.add('dragover');
+             });
+        });
+
+        ['dragleave', 'drop'].forEach(name => {
+             dropZone.addEventListener(name, (e) => {
+                 e.preventDefault();
+                 dropZone.classList.remove('dragover');
+             });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+             const files = e.dataTransfer.files;
+             if (files.length > 0) handleUpload(files[0]);
+        });
+
+        function handleUpload(file) {
+             const formData = new FormData();
+             formData.append('video', file);
+
+             progressContainer.style.display = 'block';
+             const oldSegments = document.getElementById('segments-section');
+             if (oldSegments) oldSegments.style.display = 'none';
+             activeStatus.textContent = "Uploading";
+             logsPanel.innerHTML = `<div>Uploading: ${file.name} ...</div>`;
+             progressBar.style.width = '10%';
+             percentVal.textContent = '10%';
+
+             fetch('/api/upload', {
+                  method: 'POST',
+                  body: formData
+             })
+             .then(r => {
+                  if (!r.ok) throw new Error("Upload Failed");
+                  return r.json();
+             })
+             .then(data => {
+                  activeVideoId = data.video_id;
+                  logsPanel.innerHTML += `<div>✅ Upload accepted. ID: ${activeVideoId}</div>`;
+                  startPolling(activeVideoId);
+             })
+             .catch(err => {
+                  activeStatus.textContent = "Failed";
+                  logsPanel.innerHTML += `<div style="color: #EF4444">❌ Error: ${err.message}</div>`;
+             });
+        }
+
+        function startPolling(videoId) {
+            if (pollInterval) clearInterval(pollInterval);
+            
+            pollInterval = setInterval(() => {
+                fetch(`/api/status/${videoId}`)
+                .then(r => r.json())
+                .then(data => {
+                     activeStatus.textContent = data.status;
+                     progressBar.style.width = `${data.progress}%`;
+                     percentVal.textContent = `${data.progress}%`;
+
+                     // Render logs
+                     logsPanel.innerHTML = data.logs.map(log => `<div>${log}</div>`).join('');
+                     logsPanel.scrollTop = logsPanel.scrollHeight;
+
+                     if (data.status === 'Completed' || data.status === 'Failed') {
+                          clearInterval(pollInterval);
+                          if (data.status === 'Completed' && data.segments_metadata) {
+                               renderSegments(data.segments_metadata);
+                          }
+                     }
+
+                });
+            }, 1000);
+        }
+
+        function renderSegments(metadata) {
+             const segmentsSection = document.getElementById('segments-section');
+             const segmentsGrid = document.getElementById('segments-grid');
+             const segmentCount = document.getElementById('segment-count');
+
+             if (!segmentsSection || !segmentsGrid) return;
+
+             segmentsSection.style.display = 'block';
+             segmentsGrid.innerHTML = '';
+             segmentCount.textContent = `${metadata.length} Clips`;
+
+             metadata.forEach(seg => {
+                  const card = document.createElement('div');
+                  card.className = "video-card";
+                  card.innerHTML = `
+                       <div class="card-cover" style="height: auto; padding: 0.5rem;">
+                           <video src="${seg.url}" controls style="width: 100%; border-radius: 12px; max-height: 180px;"></video>
+                       </div>
+                       <div class="card-content" style="padding: 0.8rem;">
+                           <div class="time-markers">${seg.start_time.toFixed(1)}s - ${seg.end_time.toFixed(1)}s</div>
+                           <h4 style="font-size: 0.85rem;">Segment ${seg.index + 1}</h4>
+                           <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.4rem; font-family: monospace;">
+                               Video Embeds: [${seg.dimensions} dims]
+                           </div>
+                           <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.2rem; font-family: monospace;">
+                               Text Embeds: [${seg.text_dimensions || 0} dims]
+                           </div>
+                           <div style="font-size: 0.75rem; color: #10B981; margin-top: 0.6rem; line-height: 1.3;">
+                               💡 ${seg.description || 'No description available'}
+                           </div>
+                       </div>
+
+
+                  `;
+                  segmentsGrid.appendChild(card);
+             });
+             
+             // Smooth Scroll to segments
+             segmentsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+
+        function triggerSearch() {
+             const query = document.getElementById('query-input').value.trim();
+             if (!query) return;
+
+             resultsGrid.innerHTML = "<div>Searching indexed vectors...</div>";
+
+             fetch(`/api/search?q=${encodeURIComponent(query)}`)
+             .then(r => r.json())
+             .then(data => {
+                   resultsGrid.innerHTML = "";
+                   if (!data.results || data.results.length === 0) {
+                        resultsGrid.innerHTML = `<div style="color: #FBBF24">검색 결과가 없거나 오류가 발생했습니다. (상세: ${data.detail || '결과 없음'})</div>`;
+                        return;
+                   }
+
+                   // 1. Render Top Match Cards
+                   data.results.forEach(item => {
+                        const card = document.createElement('div');
+                        card.className = "video-card";
+                        card.innerHTML = `
+                              <div class="card-cover" style="height: auto; padding: 0.5rem;">
+                                  <video src="${item.url}" controls style="width: 100%; border-radius: 12px; max-height: 180px;"></video>
+                                  <div class="score-indicator" style="top: 1rem; right: 1rem;">RRF: ${item.score.toFixed(4)}</div>
+                              </div>
+                             <div class="card-content">
+                                 <div class="time-markers">${item.start_time}s - ${item.end_time}s</div>
+                                 <h4>${item.video_name}</h4>
+                                 <div style="font-size: 0.75rem; color: #2DD4BF; margin-top: 0.5rem; line-height: 1.3;">
+                                      📝 ${item.description || 'No description'}
+                                 </div>
+                             </div>
+                        `;
+                        resultsGrid.appendChild(card);
+                   });
+
+                   // 2. Render Diagnostics Table
+                   if (data.diagnostics) {
+                        const diagPanel = document.createElement('div');
+                        diagPanel.className = "diagnostics-panel";
+                        diagPanel.style = "margin-top: 2rem; background: #1E293B; border-radius: 12px; padding: 1.5rem; color: #E2E8F0; width: 100%; grid-column: 1 / -1; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);";
+                                                const buildCells = (arr) => {
+                             let cells = "";
+                             for(let i=0; i<3; i++) {
+                                 if (arr[i]) {
+                                      // Escape potential single quotes from description
+                                      const cleanDesc = arr[i].description.replace(/'/g, "\\'");
+                                      const videoLabel = arr[i].video_name ? `<br><span style="font-size:0.65rem; color:#94A3B8; display:block; margin-top:3px;">(${arr[i].video_name.split('/').pop().slice(-15)})</span>` : '';
+                                      cells += `<td style="padding: 0.75rem; border: 1px solid #334155;" title="${cleanDesc}">Segment ${arr[i].segment_index + 1}${videoLabel}</td>`;
+                                 } else {
+                                      cells += `<td style="padding: 0.75rem; border: 1px solid #334155; color: #475569;">-</td>`;
+                                }
+                            }
+                            return cells;
+                        };
+
+                        diagPanel.innerHTML = `
+                             <h4 style="margin-bottom: 1.2rem; color: #2DD4BF; font-weight: 600;">🔍 하이브리드 검색 세부 진단 결과 (RRF 매칭 성적표)</h4>
+                             <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; border: 1px solid #334155;">
+                                 <thead>
+                                     <tr style="background: #0F172A; border-bottom: 2px solid #334155;">
+                                         <th style="padding: 0.75rem; border: 1px solid #334155;">검색 엔진</th>
+                                         <th style="padding: 0.75rem; border: 1px solid #334155;">1순위 (Rank #1)</th>
+                                         <th style="padding: 0.75rem; border: 1px solid #334155;">2순위 (Rank #2)</th>
+                                         <th style="padding: 0.75rem; border: 1px solid #334155;">3순위 (Rank #3)</th>
+                                     </tr>
+                                 </thead>
+                                 <tbody>
+                                     <tr>
+                                         <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🎥 영상 매칭 (시각)</td>
+                                         ${buildCells(data.diagnostics.results_v)}
+                                     </tr>
+                                     <tr>
+                                         <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">📝 텍스트 매칭 (설명)</td>
+                                         ${buildCells(data.diagnostics.results_t)}
+                                     </tr>
+                                 </tbody>
+                             </table>
+                        `;
+                        resultsGrid.appendChild(diagPanel);
+                   }
+              })
+             .catch(err => {
+                  resultsGrid.innerHTML = `<div style="color: #EF4444">Search Error: ${err.message}</div>`;
+             });
+        }
+    </script>
+</body>
+</html>

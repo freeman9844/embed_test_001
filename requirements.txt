@@ -1,0 +1,12 @@
+--index-url https://pypi.org/simple/
+google-genai
+
+fastapi
+lancedb
+uvicorn
+python-multipart
+jinja2
+aiofiles
+numpy
+pydantic-settings
+dpkt
