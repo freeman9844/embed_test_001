@@ -14,7 +14,7 @@
 
 ### 2. 🧠 Diverse Embedding Fusion Chain
 - **Visual/Multimodal Embedding (`gemini-embedding-2-preview`)**: Projects the video's **visual composition, objects, and dynamic motions** directly into a multi-dimensional vector space via Vertex AI's next-gen embedding model.
-- **Textual Description Generation (`gemini-3.1-flash-lite-preview`)**: Automatically generates concise visual descriptions (`1-2 lines`) for each clip using optimized prompts to augment semantic accuracy.
+- **Textual Description Generation (`gemini-3.1-flash-lite-preview`)**: Automatically generates descriptive text in **300-character descriptive units** using facts-only framing layout to augment semantic accuracy.
 - **Dense Text Embedding (`gemini-embedding-001`)**: The generated descriptions are processed into extreme-precision **3072-dimensional** dense vectors using Google's dedicated text embedding engine.
 
 ### 3. ⚖️ Hybrid RRF & BM25 Keyword Search Fusion
