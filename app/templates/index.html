@@ -624,7 +624,11 @@
                                          <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">📝 텍스트 매칭 (설명)</td>
                                          ${buildCells(data.diagnostics.results_t)}
                                      </tr>
-                                 </tbody>
+                                      <tr>
+                                          <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🔤 키워드 매칭 (BM25)</td>
+                                          ${buildCells(data.diagnostics.results_fts || [])}
+                                      </tr>
+                                  </tbody>
                              </table>
                         `;
                         resultsGrid.appendChild(diagPanel);
