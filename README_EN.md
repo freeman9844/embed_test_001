@@ -24,6 +24,9 @@
 ### 4. ⚡ Threaded Acceleration
 - Implements **`ThreadPoolExecutor` dispatch engines** to offset concurrent API latency over asynchronous triggers, accelerating processing speed by **up to 70%** during mass clip index operations without hanging loops.
 
+### 5. 🧹 Real-time Vector DB Clear (Clear Database)
+- Supplies an admin-facing maintenance trigger using **`one-click layout buttons`** that drops and server-less reinitializes local LanceDB indices instantly, bypassing downtime for recursive prototyping cycles.
+
 ---
 
 ## 🛠️ Tech Stack

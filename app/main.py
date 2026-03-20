@@ -394,6 +394,20 @@ async def sample_video(background_tasks: BackgroundTasks):
          "filename": filename
     })
 
+@app.post("/api/clear_db")
+async def clear_db():
+    try:
+         try:
+              db.drop_table("video_scenes_v4")
+         except Exception:
+              pass # ignore if already not exists
+         
+         # Recreate table immediately with dummy row inference
+         get_table()
+         return {"status": "success", "message": "Database cleared and reinitialized"}
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/status/{video_id}")
 
 async def get_status(video_id: str):

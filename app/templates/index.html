@@ -307,9 +307,12 @@
                     <input type="file" id="file-input" accept="video/mp4,video/quicktime">
                 </div>
 
-                <div class="sample-zone" style="text-align: center; margin-top: 1.25rem;">
-                     <button onclick="startSample()" class="search-btn" style="background: #E8F0FE; color: #1A73E8; font-weight: 800; margin: 0 auto; box-shadow: 0 4px 12px rgba(26,115,232,0.15); border-radius: 20px;">
+                <div class="sample-zone" style="text-align: center; margin-top: 1.25rem; display: flex; gap: 10px; justify-content: center;">
+                     <button onclick="startSample()" class="search-btn" style="background: #E8F0FE; color: #1A73E8; font-weight: 800; box-shadow: 0 4px 12px rgba(26,115,232,0.15); border-radius: 20px;">
                           <i class="fa-solid fa-vial"></i> 🧪 샘플 비디오로 즉시 가동하기
+                     </button>
+                     <button onclick="clearDB()" class="search-btn" style="background: #FEE8E8; color: #D93025; font-weight: 800; box-shadow: 0 4px 12px rgba(217,48,37,0.15); border-radius: 20px;">
+                          <i class="fa-solid fa-trash-can"></i> 🧹 Vector DB 비우기
                      </button>
                 </div>
 
@@ -398,6 +401,24 @@
             })
             .catch(err => {
                 logsPanel.innerHTML += `<div style="color:red">[Error] ${err}</div>`;
+            });
+        }
+
+        function clearDB() {
+            if (!confirm("Vector DB의 모든 임베딩 데이터를 완전하게 비우시겠습니까?")) return;
+            
+            fetch('/api/clear_db', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    alert("정상적으로 데이터베이스가 초기화되었습니다.");
+                    location.reload(); // Refresh to clear view cleanly
+                } else {
+                    alert("초기화 실패");
+                }
+            })
+            .catch(err => {
+                alert("에러 발생: " + err);
             });
         }
 
