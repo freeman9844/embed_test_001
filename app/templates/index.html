@@ -462,24 +462,46 @@
              progressBar.style.width = '10%';
              percentVal.textContent = '10%';
 
-             fetch('/api/upload', {
-                  method: 'POST',
-                  body: formData
-             })
-             .then(r => {
-                  if (!r.ok) throw new Error("Upload Failed");
-                  return r.json();
-             })
-             .then(data => {
-                  activeVideoId = data.video_id;
-                  logsPanel.innerHTML += `<div>✅ Upload accepted. ID: ${activeVideoId}</div>`;
-                  startPolling(activeVideoId);
-             })
-             .catch(err => {
-                  activeStatus.textContent = "Failed";
-                  logsPanel.innerHTML += `<div style="color: #EF4444">❌ Error: ${err.message}</div>`;
-             });
-        }
+             const xhr = new XMLHttpRequest();
+              
+              // 1. Upload Progress listener Node layout creations updates Node
+              xhr.upload.addEventListener('progress', (e) => {
+                  if (e.lengthComputable) {
+                      const percent = Math.round((e.loaded / e.total) * 100);
+                      // Cap at 95% to leave buffer for backend processing bootstrap
+                      const displayPercent = Math.min(95, Math.round(percent * 0.95)); 
+                      progressBar.style.width = `${displayPercent}%`;
+                      percentVal.textContent = `${displayPercent}%`;
+                      activeStatus.textContent = `Uploading (${percent}%)`;
+                  }
+              });
+
+              // 2. Response handler Node creations Node layout Node correctly
+              xhr.onload = function() {
+                   if (xhr.status >= 200 && xhr.status < 300) {
+                       try {
+                            const data = JSON.parse(xhr.responseText);
+                            activeVideoId = data.video_id;
+                            logsPanel.innerHTML += `<div>✅ Upload accepted. Video ID: ${activeVideoId}</div>`;
+                            startPolling(activeVideoId);
+                       } catch (err) {
+                            activeStatus.textContent = "Error";
+                            logsPanel.innerHTML += `<div style="color: #EF4444">❌ Error: Invalid Response</div>`;
+                       }
+                   } else {
+                       activeStatus.textContent = "Failed";
+                       logsPanel.innerHTML += `<div style="color: #EF4444">❌ Error: Upload Failed (${xhr.status})</div>`;
+                   }
+              };
+
+              xhr.onerror = function() {
+                   activeStatus.textContent = "Failed";
+                   logsPanel.innerHTML += `<div style="color: #EF4444">❌ Error: Network Failure</div>`;
+              };
+
+              xhr.open('POST', '/api/upload');
+              xhr.send(formData);
+         }
 
         function startPolling(videoId) {
             if (pollInterval) clearInterval(pollInterval);
