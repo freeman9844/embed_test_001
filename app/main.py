@@ -6,7 +6,7 @@ import time
 import shutil
 import asyncio
 from typing import List, Dict, Any
-from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Request, Form, HTTPException
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Request, Form, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -336,6 +336,10 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
 
 
 # 5. Endpoint Routes
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
     """Renders the main layout interface."""
