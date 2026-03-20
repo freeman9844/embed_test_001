@@ -17,9 +17,9 @@
 - **Textual Description Generation (`gemini-3.1-flash-lite-preview`)**: Automatically generates concise visual descriptions (`1-2 lines`) for each clip using optimized prompts to augment semantic accuracy.
 - **Dense Text Embedding (`gemini-embedding-001`)**: The generated descriptions are processed into extreme-precision **3072-dimensional** dense vectors using Google's dedicated text embedding engine.
 
-### 3. ⚖️ Reciprocal Rank Fusion (RRF) & Keyword Boosting
-- **Rank Merging (RRF)**: Balances and merges high-level visual match weights with precise textual description match scores to calculate an optimized, unified similarity ranking for clips.
-- **Word-Level Boosting**: Adds **absolute weight score bonuses** for exact substring matches of hard-to-infer proper nouns within generated descriptions (maximizing overall lookup relevance).
+### 3. ⚖️ Hybrid RRF & BM25 Keyword Search Fusion
+- **BM25 Keyword Search (FTS)**: Bypasses manual string-match fixes for standardized morph-based BM25 Full-Text Search (FTS) weights calculated locally.
+- **3-Way Reciprocal Rank Fusion (RRF)**: Weighs and merges Visual dense vectors, Text dense vectors, and BM25 Keyword ranks fairly to determine absolute winning clip scenes.
 
 ### 4. ⚡ Threaded Acceleration
 - Implements **`ThreadPoolExecutor` dispatch engines** to offset concurrent API latency over asynchronous triggers, accelerating processing speed by **up to 70%** during mass clip index operations without hanging loops.

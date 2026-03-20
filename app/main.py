@@ -70,18 +70,28 @@ def generate_description_rest(video_bytes, model_id="gemini-3.1-flash-lite-previ
             "role": "user",
             "parts": [
                 {"inlineData": {"mimeType": "video/mp4", "data": b64_data}},
-                {"text": "Describe ONLY the visual actions, movements, and immediate events happening in this 10-second standalone clip. DO NOT summarize the movie or add general plot context not visible in this clip. Avoid repeated introductions.\n\nRules:\n1. Output MUST be strictly in Korean (한국어).\n2. Keep it EXTREMELY short and concise, maximum 1 or 2 lines."}
+                {"text": "이 10초짜리 비디오 클립을 보고 최대한 구체적이고 묘사적인 한국어(Korean) 텍스트 설명을 생성하세요.\n\n다음 요소들을 포함하여 기술해 주세요:\n1. 등장인물의 시각적 행동, 움직임 및 화면의 구도\n2. 주변 배경, 장소, 사물에 대한 자세한 묘사\n3. 영상에서 유추할 수 있는 인물들의 감정 상태 및 전반적인 분위기\n\n규칙:\n- 절대 영화의 전체 줄거리를 요약하거나 클립에 보이지 않는 맥락은 지어내지 마세요.\n- 단답이나 1-2줄로 압축하지 말고, 검색 적중율이 높아질 수 있도록 묘사적 문장으로 서술해 주세요."}
 
 
             ]
         }],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 300}
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
     }
     response = requests.post(url, headers=headers, json=payload, timeout=60)
     if response.status_code != 200: 
          raise Exception(f"Generate Error {response.status_code}: {response.text}")
     try:
-         return response.json()['candidates'][0]['content']['parts'][0]['text']
+         res_json = response.json()
+         candidate = res_json['candidates'][0]
+         content = candidate.get('content', {})
+         parts = content.get('parts', [])
+         
+         if parts:
+              return parts[0]['text']
+         else:
+              print(f"⚠️ Parts missing in response Candidate. FinishReason: {candidate.get('finishReason')}")
+              # Return empty description or partial if model returned other fields layout?
+              return "비주얼 묘사 생성이 한도 도달 등으로 인해 도중 절삭되었습니다."
     except Exception as e: 
          raise Exception(f"Parse Error {e} | Resp: {response.text}")
 
@@ -302,6 +312,13 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
             except Exception: pass # If table was empty or not indexed
             
             table.add(data_to_insert)
+            
+            try:
+                 # Create/Update FTS index for keyword lookup support (BM25)
+                 table.create_fts_index("description", replace=True)
+            except Exception as e:
+                 print(f"FTS Index indexing Error: {e}")
+
             process_status[video_id]["status"] = "Completed"
 
             process_status[video_id]["progress"] = 100
@@ -439,43 +456,56 @@ async def search_index(q: str):
 
          # 2. Search LanceDB
          table = get_table()
+         
+         # A. Visual Vector Dense Search
          results_v = table.search(query_vector, vector_column_name="embedding").where("id != 'init'").limit(10).to_list()
 
-         
+         # B. Text Description Dense Search
          results_t = []
          if text_vector:
               results_t = table.search(text_vector, vector_column_name="text_embedding").where("id != 'init'").limit(10).to_list()
 
+         # C. Keyword BM25 FTS Search
+         results_fts = []
+         try:
+              results_fts = table.search(q, query_type="fts").where("id != 'init'").limit(10).to_list()
+         except Exception as e:
+              print(f"⚠️ FTS Query bypassed/failed: {e}")
 
          # 3. Reciprocal Rank Fusion (RRF)
          print(f"\n--- 🔍 RRF Search Debug: Query='{q}' ---")
-         print(f"🎥 Video Search Results ({len(results_v)} items):")
+         print(f"🎥 Video Spatial Search Results ({len(results_v)} items):")
          for r, row in enumerate(results_v):
               print(f"  Rank {r+1}: Seg={row['segment_index']} | {row.get('description','')[:40]}...")
-         print(f"📝 Text Search Results ({len(results_t)} items):")
+         print(f"📝 Description Vector Search Results ({len(results_t)} items):")
          for r, row in enumerate(results_t):
+              print(f"  Rank {r+1}: Seg={row['segment_index']} | {row.get('description','')[:40]}...")
+         print(f"🔤 Keyword BM25 FTS Search Results ({len(results_fts)} items):")
+         for r, row in enumerate(results_fts):
               print(f"  Rank {r+1}: Seg={row['segment_index']} | {row.get('description','')[:40]}...")
 
          rrf_scores = {}
          lookup_item = {}
 
-         # Video ranking
+         # Video Dense ranking
          for rank, row in enumerate(results_v):
               item_id = row['id']
               score = 1.0 / (rank + 60)
-              target_words = [w for w in q.split() if w not in ['장면', '모습', '영상', '사진']]
-              if any(w.lower() in row.get('description', '').lower() for w in target_words):
-                   score += 0.5 # Substring Match Bonus
+              # Manual phrase boosting removed based on guidance
               rrf_scores[item_id] = rrf_scores.get(item_id, 0) + score
               lookup_item[item_id] = row
 
-         # Text ranking
+         # Text Dense ranking
          for rank, row in enumerate(results_t):
               item_id = row['id']
               score = 1.25 * (1.0 / (rank + 60))
-              target_words = [w for w in q.split() if w not in ['장면', '모습', '영상', '사진']]
-              if any(w.lower() in row.get('description', '').lower() for w in target_words):
-                   score += 0.5 # Substring Match Bonus
+              rrf_scores[item_id] = rrf_scores.get(item_id, 0) + score
+              lookup_item[item_id] = row
+
+         # Keyword FTS ranking
+         for rank, row in enumerate(results_fts):
+              item_id = row['id']
+              score = 1.0 * (1.0 / (rank + 60)) # Fair weighting
               rrf_scores[item_id] = rrf_scores.get(item_id, 0) + score
               lookup_item[item_id] = row
 
@@ -495,15 +525,15 @@ async def search_index(q: str):
                   "url": row.get("url", "")
               })
 
-
-
-
          diagnostics = {
               'results_v': [
                    {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_v
               ],
               'results_t': [
                    {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_t
+              ],
+              'results_fts': [
+                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_fts
               ]
          }
          return {'query': q, 'results': items, 'diagnostics': diagnostics}
