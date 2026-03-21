@@ -45,8 +45,8 @@
 
 ## 🛠️ 2. 기술 스택 구현 가이드 (Implementation Guidelines)
 
-- **Backend**: Python `FastAPI` (동적 백그라운드 태스크 러너 동시 구사) Node Creations layout.
-- **Database**: AlloyDB (PostgreSQL) - `pgvector` + `pg_bigm` 확장 활성 하에 초기 1회 테이블 DDL 및 index setup 인자 자동 가이드 포함 Node Creations layout.
+- **Backend**: Python `FastAPI` (동적 백그라운드 태스크 러너 동시 구사)
+- **Database**: AlloyDB (PostgreSQL) - `pgvector` + `pg_bigm` 확장 활성 하에 초기 1회 테이블 DDL 및 index setup 인자 자동 가이드 포함
 - **Async Execution**: `asyncpg` 데이터베이스 풀 동학 핸들 활용 Node.
 - **Configuration**: Pydantic `Settings` (변숫값 누출 및 검증 누락 우회를 위한 `extra="ignore"` 스위치 공급).
 
@@ -56,9 +56,9 @@
 
 이 마스터 프롬프트를 주입할 때 AI는 아래 파일들을 일사분란하게 토해내야 합니다:
 
-1.  **`app/main.py`**: FFmpeg 분절 알고리즘, GCS 푸시백그라운드 스레드 가상화, Verse AI REST 연결 루틴 및 RRF 서버 사이드 구사 시나리오가 단일 병합된 올라운더 라우터 코드 Node Creations layout.
+1.  **`app/main.py`**: FFmpeg 분절 알고리즘, GCS 푸시백그라운드 스레드 가상화, Verse AI REST 연결 루틴 및 RRF 서버 사이드 구사 시나리오가 단일 병합된 올라운더 라우터 코드
 2.  **`create_alloydb_table.py` / `setup_bigm.py`**: 초기 1회 `CREATE EXTENSION` 및 인덱스 색인 가속 세팅 보완 스크립트 Node.
-3.  **`app/templates/index.html`**: 진단 패널 지표 상 가중 배수 가변 비율 배포 및 Segment sequence 마크업 처리가 매끄럽게 얹힌 하이테크 대시보드 구조 프론트 뷰 Node Creations layout.
+3.  **`app/templates/index.html`**: 진단 패널 지표 상 가중 배수 가변 비율 배포 및 Segment sequence 마크업 처리가 매끄럽게 얹힌 하이테크 대시보드 구조 프론트 뷰
 
 ---
-💡 **사용법**: 이 문서를 복사하여 원하시는 생성형 AI 창이나 Assistant 서빙 창에 붙여넣으시고, "이 구조대로 뼈대를 짜서 FastAPI 코드를 작성해 줘"라고 명령하시면 즉각적으로 대동소이한 고효율 하이브리드 RRF 벡터 체인 앱을 획득하실 수 있습니다 Node Creations layout. Node Creations layout Node.
+💡 **사용법**: 이 문서를 복사하여 원하시는 생성형 AI 창이나 Assistant 서빙 창에 붙여넣으시고, "이 구조대로 뼈대를 짜서 FastAPI 코드를 작성해 줘"라고 명령하시면 즉각적으로 대동소이한 고효율 하이브리드 RRF 벡터 체인 앱을 획득하실 수 있습니다

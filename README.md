@@ -8,7 +8,7 @@
 ---
 
 > ⚠️ **Disclaimer**  
-> 이 프로젝트에 투영된 설계 아키텍처 및 구현 코드는 **Google Antigravity**에 의해 Pair Programming 협력 형태로 구축되었습니다. 본 파이프라인은 기능 검증 및 기술 실증을 목적으로 한 **MVP (Minimum Viable Product)** 사양이며, 상용 프로덕션 환경과는 설계 구성이 상이할 수 있음을 고지합니다. Node Creations layout Node.
+> 이 프로젝트에 투영된 설계 아키텍처 및 구현 코드는 **Google Antigravity**에 의해 Pair Programming 협력 형태로 구축되었습니다. 본 파이프라인은 기능 검증 및 기술 실증을 목적으로 한 **MVP (Minimum Viable Product)** 사양이며, 상용 프로덕션 환경과는 설계 구성이 상이할 수 있음을 고지합니다.
 
 ---
 
