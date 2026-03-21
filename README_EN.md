@@ -14,18 +14,20 @@
 
 ### 2. 🧠 Diverse Embedding Fusion Chain
 - **Visual/Multimodal Embedding (`gemini-embedding-2-preview`)**: Projects the video's **visual composition, objects, and dynamic motions** directly into a multi-dimensional vector space via Vertex AI's next-gen embedding model.
-- **Textual Description Generation (`gemini-3.1-flash-lite-preview`)**: Automatically generates descriptive text in **300-character descriptive units** using facts-only framing layout to augment semantic accuracy.
+- **Textual Description Generation (`gemini-3.1-flash-lite-preview`)**: Automatically generates descriptive text in **300-character descriptive units** using facts-only framing to augment framing accuracy.
 - **Dense Text Embedding (`gemini-embedding-001`)**: The generated descriptions are processed into extreme-precision **3072-dimensional** dense vectors using Google's dedicated text embedding engine.
 
-### 3. ⚖️ Hybrid RRF & BM25 Keyword Search Fusion
-- **BM25 Keyword Search (FTS)**: Bypasses manual string-match fixes for standardized morph-based BM25 Full-Text Search (FTS) weights calculated locally.
-- **3-Way Reciprocal Rank Fusion (RRF)**: Weighs and merges Visual dense vectors, Text dense vectors, and BM25 Keyword ranks fairly to determine absolute winning clip scenes.
+### 3. ⚖️ Hybrid RFF & AlloyDB Full-Text Search Fusion
+- **AlloyDB pgvector Vector Search**: Visual and text vectors are processed using AlloyDB's `<=>` cosine distance operators for fast kNN approximation.
+- **PostgreSQL Full-Text Search (FTS)**: Cross-references morph-based keyword weights via `to_tsvector` and `plainto_tsquery` together with `ts_rank_cd` scoring systems.
+- **3-Way Reciprocal Rank Fusion (RRF)**: Weighs and merges Visual dense vectors, Text dense vectors, and Keyword FTS ranks fairly using Reciprocal Rank Fusion (RRF) standards to determine absolute winning clip scenes.
 
-### 4. ⚡ Threaded Acceleration
-- Implements **`ThreadPoolExecutor` dispatch engines** to offset concurrent API latency over asynchronous triggers, accelerating processing speed by **up to 70%** during mass clip index operations without hanging loops.
+### 4. ⚡ GCS Media Storage & Threaded Acceleration
+- **Background Cloud Storage Worker**: Segmented `.mp4` files are immediately dispatched into the **Google Cloud Storage** bucket (`gs://jwlee-gcs-video-002`) to maintain zero footprint loads inside server disk mounts.
+- **Parallel processing dispatch (`ThreadPoolExecutor`)**: Offsets concurrent API dispatch latency chains, achieving **up to 70%** accelerated mass index loads.
 
 ### 5. 🧹 Real-time Vector DB Clear (Clear Database)
-- Supplies an admin-facing maintenance trigger using **`one-click layout buttons`** that drops and server-less reinitializes local LanceDB indices instantly, bypassing downtime for recursive prototyping cycles.
+- Supplies an admin-facing maintenance trigger with **`one-click layout buttons`** that completely drops AlloyDB rows and zeroes serve-state caches instantly for prototype-heavy recursions.
 
 ---
 
@@ -34,17 +36,18 @@
 | Domain | Technical Specification |
 | :--- | :--- |
 | **Backend** | `FastAPI` (Async Streaming), `Jinja2` |
-| **Vector DB** | `LanceDB` (On-Disk serverless persistence) |
-| **Embedding / LLM** | `gemini-embedding-2-preview` (Multimodal), `gemini-embedding-001` (Text), `gemini-3.1-flash-lite-preview` (Generative Descriptions) |
+| **Vector DB** | **`AlloyDB for PostgreSQL`** (Using `pgvector` and asynchronous `asyncpg` connect chains) |
+| **Cloud Storage** | **`Google Cloud Storage`** (Delivering direct media split streaming buffers to browsers) |
+| **Embedding / LLM** | `gemini-embedding-2-preview`, `gemini-embedding-001`, `gemini-3.1-flash-lite-preview` |
 | **Media Processing**| `FFmpeg` (Accurate Frame Re-encoding Splits) |
-| **Frontend** | `Vanilla HTML/CSS/JS`, `Google Material 3 Light Style`, `FontAwesome` |
+| **Frontend** | `Vanilla HTML/CSS/JS`, `Google Material 3 Light Style` |
 
 ---
 
 ## ⚙️ Getting Started
 
 ### 1. Prerequisite Installations
-Your host machine must contain `FFmpeg` packages configured upfront for splitting video re-encodings smoothly.
+Your host machine must contain `FFmpeg` packages configured upfront.
 ```bash
 # macOS (Homebrew)
 brew install ffmpeg
@@ -54,11 +57,10 @@ sudo apt-get install ffmpeg
 ```
 
 ### 2. Environment Variables configuration
-Set up environment configs required for Google Cloud Vertex auth adapters upfront:
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="path/to/your/service_account.json"
 export PROJECT_ID="your_google_cloud_project_id"
-export LOCATION="us-central1" # Configure according to supported regions
+export LOCATION="us-central1"
 ```
 
 ### 3. Isolated installation and Start Commands
@@ -78,26 +80,10 @@ Visit `http://localhost:8000` via your browser to view the hybrid dashboard imme
 ---
 
 ## 📊 Diagnostics Scorecard
-Performing search lookup populates the **`Hybrid Search Diagnostics scorecard (RRF Results)`** scorecard below matches reels.  
+Search lookup populates tables for **`Hybrid Search Diagnostics (RRF Results)`** below reels.  
 Enables visual traceability covering which embedding weights (visual vs captions) turned lookup rankings upside down with straightforward design fluidity.
 
 ---
 
-## 🔬 Embedding Diversity Guide
-
-This application is engineered as an educational reference demonstrating when and how to **Divide and Distribute Google's Embedding Portfolio (Diversity)** intelligently.
-
-1.  **`gemini-embedding-2-preview` (Multimodal Integration)**
-    *   **Goal**: Projects continuous continuous frames of visual datasets into discrete hubs.
-    *   **Spec**: Hybridizes text and image context together to deliver holistic 3072-dimensional spaces.
-
-2.  **`gemini-3.1-flash-lite-preview` (Visual2Text Conversion)**
-    *   **Goal**: Flattens un-readable video framing into human-verifyable textual layers.
-    *   **Spec**: Acts as a keyword-heavy capture engine securing proper noun matchings.
-
-3.  **`gemini-embedding-001` (Dense Text Density)**
-    *   **Goal**: Compacts textual descriptions into extremely granular 3072 scaling arrays.
-    *   **Spec**: Standardizes text densities extremely efficiently supporting weighted rank fusion (RRF) pillars.
-
 > 💡 **Highly Recommended for**:  
-> Developer scopes struggling because "Visual embeddings miss exact noun lookup accuracy, yet text captioning misses visual layout contexts" – bridging both worlds natively under RRF thresholds.
+> Developer scopes struggling because "Visual embeddings miss exact noun lookup accuracy, yet text captioning misses visual design layouts" – bridging both worlds natively under **AlloyDB dense vector operations and RRF thresholds**.

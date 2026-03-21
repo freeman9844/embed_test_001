@@ -11,17 +11,27 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import lancedb
+import asyncpg
 import numpy as np
 import requests
 import base64
+from contextlib import asynccontextmanager
 from google.auth import default
 from google.auth.transport.requests import Request as AuthRequest
 
 
+from google.cloud import storage
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
+
+def vector_to_str(vec):
+    """Converts a vector into pgvector string format '[1.0, 2.0]'"""
+    if vec is None:
+         return None
+    if isinstance(vec, np.ndarray):
+         vec = vec.tolist()
+    return f"[{','.join(map(str, vec))}]"
 
 
 
@@ -39,13 +49,19 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # 2. Application Setup
-app = FastAPI(title="Video Search with Gemini Embedding 2")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize AlloyDB Connection Pool
+    conn_str = "postgresql://postgres:DefaultSearch_1234@34.64.97.194:5432/postgres"
+    print("🔌 Initializing AlloyDB Connection Pool...")
+    app.state.pool = await asyncpg.create_pool(conn_str, ssl="require", timeout=30, min_size=0, max_size=10)
+    yield
+    # Close pool on shutdown
+    await app.state.pool.close()
+
+app = FastAPI(title="Video Search with Gemini Embedding 2", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
-
-# Initialize LanceDB
-DB_PATH = "app/database/lancedb"
-db = lancedb.connect(DB_PATH)
 
 # Initialize global tracking for upload/embedding process status
 # { "video_id": { "status": "processing", "progress": 0, "logs": [] } }
@@ -120,26 +136,7 @@ def embed_gemini_embedding_001_rest(text, model_id="gemini-embedding-001"):
          raise Exception(f"Parse Gemini 001 Error {e} | Resp: {response.text}")
 
 
-# 3. LanceDB Table Setup
-def get_table():
-    try:
-         return db.open_table("video_scenes_v4")
-    except Exception:
-         # Create table if not exists with dummy row for schema inference
-         # Schema: [id, segment_index, start_time, end_time, video_name, embedding, description, text_embedding, url]
-         dummy_embedding = [0.0] * 3072 
-         dummy_text_embedding = [0.0] * 3072
-         return db.create_table("video_scenes_v4", data=[{
-             "id": "init",
-             "segment_index": 0,
-             "start_time": 0.0,
-             "end_time": 0.0,
-             "video_name": "init",
-             "embedding": dummy_embedding,
-             "description": "init",
-             "text_embedding": dummy_text_embedding,
-             "url": "init"
-         }])
+
 
 
 
@@ -215,7 +212,7 @@ def run_ffmpeg_split(video_path: str, output_pattern: str):
          print(f"FFmpeg Error: {e.stderr}")
          raise e
 
-async def process_video_background(video_path: str, video_name: str, video_id: str, client):
+async def process_video_background(video_path: str, video_name: str, video_id: str, client, pool):
     """
     Takes a saved clip, segments it, generates embeddings, and saves to LanceDB.
     """
@@ -225,6 +222,8 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
     static_segments_dir = f"app/static/segments/{video_id}"
     os.makedirs(static_segments_dir, exist_ok=True)
     output_pattern = f"{static_segments_dir}/segment_%03d.mp4"
+    
+    storage_client = storage.Client(project=settings.PROJECT_ID)
 
     try:
         # Step 1: Segmentation
@@ -236,7 +235,7 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
         process_status[video_id]["progress"] = 30
         process_status[video_id]["logs"].append(f"Found {len(segments)} segments. Generating embeddings.")
 
-        table = get_table()
+        # table = get_table() removed
         data_to_insert = []
         segments_metadata = []
 
@@ -263,6 +262,23 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
                     if description_text:
                         text_vector = embed_gemini_embedding_001_rest(description_text)
 
+                    # Upload segment to GCS Node creations
+                    bucket_name = "jwlee-gcs-video-002"
+                    blob_name = f"segments/{video_id}/segment_{index:03d}.mp4"
+                    try:
+                        bucket = storage_client.bucket(bucket_name)
+                        blob = bucket.blob(blob_name)
+                        blob.upload_from_filename(segment_path)
+                    except Exception as upload_err:
+                        print(f"GCS Upload Failed for index {index}: {upload_err}")
+                        raise upload_err
+
+                    gcs_url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+
+                    # Local Cleanup Item Node creations
+                    try: os.remove(segment_path)
+                    except: pass
+
                     insert_row = {
                         "id": str(uuid.uuid4()),
                         "segment_index": index,
@@ -272,14 +288,14 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
                         "embedding": embedding_vector,
                         "description": description_text if description_text else "",
                         "text_embedding": text_vector if text_vector else [0.0]*3072,
-                        "url": f"/static/segments/{video_id}/segment_{index:03d}.mp4"
+                        "url": gcs_url
                     }
 
                     metadata_row = {
                         "index": index,
                         "start_time": float(start_time),
                         "end_time": float(end_time),
-                        "url": f"/static/segments/{video_id}/segment_{index:03d}.mp4",
+                        "url": gcs_url,
                         "dimensions": len(embedding_vector),
                         "text_dimensions": len(text_vector) if text_vector else 0,
                         "description": description_text if description_text else "No description"
@@ -304,20 +320,25 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
         segments_metadata.sort(key=lambda x: x["index"])
 
 
-        # Step 3: Insert to Vector DB
+        # Step 3: Insert to Vector DB (AlloyDB)
         if data_to_insert:
-            process_status[video_id]["logs"].append("Saving to Vector DB...")
-            try:
-                 table.delete(f"video_name = '{video_name}'")
-            except Exception: pass # If table was empty or not indexed
-            
-            table.add(data_to_insert)
-            
-            try:
-                 # Create/Update FTS index for keyword lookup support (BM25)
-                 table.create_fts_index("description", replace=True)
-            except Exception as e:
-                 print(f"FTS Index indexing Error: {e}")
+            process_status[video_id]["logs"].append("Saving to AlloyDB...")
+            async with pool.acquire() as conn:
+                try:
+                    await conn.execute("DELETE FROM video_scenes_v4 WHERE video_name = $1", video_name)
+                    
+                    insert_sql = """
+                    INSERT INTO video_scenes_v4 (id, segment_index, start_time, end_time, video_name, embedding, description, text_embedding, url)
+                    VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8::vector, $9)
+                    """
+                    records = [
+                        (r['id'], r['segment_index'], r['start_time'], r['end_time'], r['video_name'], vector_to_str(r['embedding']), r['description'], vector_to_str(r['text_embedding']), r['url'])
+                        for r in data_to_insert
+                    ]
+                    await conn.executemany(insert_sql, records)
+                except Exception as e:
+                    print(f"AlloyDB Background Insert Error: {repr(e)}")
+                    raise e
 
             process_status[video_id]["status"] = "Completed"
 
@@ -329,8 +350,8 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
 
     except Exception as e:
          process_status[video_id]["status"] = "Failed"
-         process_status[video_id]["logs"].append(f"General processing error: {e}")
-         print(f"Background process error: {e}")
+         process_status[video_id]["logs"].append(f"General processing error: {repr(e)}")
+         print(f"Background process error: {repr(e)}")
     finally:
          pass
 
@@ -347,6 +368,7 @@ async def read_root(request: Request):
 
 @app.post("/api/upload")
 async def upload_video(
+    request: Request,
     background_tasks: BackgroundTasks,
     video: UploadFile = File(...)
 ):
@@ -375,7 +397,7 @@ async def upload_video(
     }
 
     # Queue background processing
-    background_tasks.add_task(process_video_background, video_path, video.filename, video_id, client)
+    background_tasks.add_task(process_video_background, video_path, video.filename, video_id, client, request.app.state.pool)
 
     return JSONResponse(status_code=202, content={
          "status": "Accepted",
@@ -384,7 +406,7 @@ async def upload_video(
     })
 
 @app.post("/api/sample")
-async def sample_video(background_tasks: BackgroundTasks):
+async def sample_video(request: Request, background_tasks: BackgroundTasks):
     """
     Triggers processing using the pre-installed sample video.
     """
@@ -407,7 +429,7 @@ async def sample_video(background_tasks: BackgroundTasks):
     }
 
     # Queue background processing
-    background_tasks.add_task(process_video_background, video_path, filename, video_id, client)
+    background_tasks.add_task(process_video_background, video_path, filename, video_id, client, request.app.state.pool)
 
     return JSONResponse(status_code=202, content={
          "status": "Accepted",
@@ -416,16 +438,12 @@ async def sample_video(background_tasks: BackgroundTasks):
     })
 
 @app.post("/api/clear_db")
-async def clear_db():
+async def clear_db(request: Request):
     try:
-         try:
-              db.drop_table("video_scenes_v4")
-         except Exception:
-              pass # ignore if already not exists
-         
-         # Recreate table immediately with dummy row inference
-         get_table()
-         return {"status": "success", "message": "Database cleared and reinitialized"}
+        async with request.app.state.pool.acquire() as conn:
+            await conn.execute("DELETE FROM video_scenes_v4")
+        process_status.clear()  # 메모리 상의 작업 상태까지 비웁니다 Node creations Node layout.
+        return {"status": "success", "message": "Database cleared"}
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
@@ -438,7 +456,7 @@ async def get_status(video_id: str):
     return process_status[video_id]
 
 @app.get("/api/search")
-async def search_index(q: str):
+async def search_index(q: str, request: Request):
     """
     Queries vector embeddings table using text query embedding
     """
@@ -458,23 +476,53 @@ async def search_index(q: str):
          if not query_vector:
              raise HTTPException(status_code=500, detail="Failed to produce query embedding")
 
-         # 2. Search LanceDB
-         table = get_table()
-         
-         # A. Visual Vector Dense Search
-         results_v = table.search(query_vector, vector_column_name="embedding").where("id != 'init'").limit(10).to_list()
-
-         # B. Text Description Dense Search
+         # 2. Search AlloyDB
+         results_v = []
          results_t = []
-         if text_vector:
-              results_t = table.search(text_vector, vector_column_name="text_embedding").where("id != 'init'").limit(10).to_list()
-
-         # C. Keyword BM25 FTS Search
          results_fts = []
-         try:
-              results_fts = table.search(q, query_type="fts").where("id != 'init'").limit(10).to_list()
-         except Exception as e:
-              print(f"⚠️ FTS Query bypassed/failed: {e}")
+
+         async with request.app.state.pool.acquire() as conn:
+             # A. Visual Vector Dense Search
+             q_v_str = vector_to_str(query_vector)
+             try:
+                 rows_v = await conn.fetch("""
+                     SELECT id, segment_index, start_time, end_time, video_name, description, url
+                     FROM video_scenes_v4
+                     WHERE id != 'init'
+                     ORDER BY embedding <=> $1::vector
+                     LIMIT 10
+                 """, q_v_str)
+                 results_v = [dict(r) for r in rows_v]
+             except Exception as e:
+                 print(f"⚠️ Visual Search Failed: {e}")
+
+             # B. Text Description Dense Search
+             if text_vector:
+                 q_t_str = vector_to_str(text_vector)
+                 try:
+                     rows_t = await conn.fetch("""
+                         SELECT id, segment_index, start_time, end_time, video_name, description, url
+                         FROM video_scenes_v4
+                         WHERE id != 'init'
+                         ORDER BY text_embedding <=> $1::vector
+                         LIMIT 10
+                     """, q_t_str)
+                     results_t = [dict(r) for r in rows_t]
+                 except Exception as e:
+                     print(f"⚠️ Text Search Failed: {e}")
+
+             # C. Keyword BM25 FTS Search
+             try:
+                 rows_fts = await conn.fetch("""
+                     SELECT id, segment_index, start_time, end_time, video_name, description, url
+                     FROM video_scenes_v4
+                     WHERE id != 'init' AND to_tsvector('simple', description) @@ plainto_tsquery('simple', $1)
+                     ORDER BY ts_rank_cd(to_tsvector('simple', description), plainto_tsquery('simple', $1)) DESC
+                     LIMIT 10
+                 """, q)
+                 results_fts = [dict(r) for r in rows_fts]
+             except Exception as e:
+                 print(f"⚠️ FTS Query bypassed/failed: {e}")
 
          # 3. Reciprocal Rank Fusion (RRF)
          print(f"\n--- 🔍 RRF Search Debug: Query='{q}' ---")
