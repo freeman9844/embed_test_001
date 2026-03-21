@@ -67,7 +67,7 @@ templates = Jinja2Templates(directory="app/templates")
 # { "video_id": { "status": "processing", "progress": 0, "logs": [] } }
 process_status: Dict[str, Dict[str, Any]] = {}
 
-def generate_description_rest(video_bytes, model_id="gemini-3.1-flash-lite-preview"):
+def generate_description_rest(gcs_uri: str, model_id="gemini-3.1-flash-lite-preview"):
     from google.auth import default
     from google.auth.transport.requests import Request as AuthRequest
     credentials, _ = default()
@@ -80,13 +80,12 @@ def generate_description_rest(video_bytes, model_id="gemini-3.1-flash-lite-previ
     
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
-    b64_data = base64.b64encode(video_bytes).decode('utf-8')
     payload = {
         "contents": [{
             "role": "user",
             "parts": [
-                {"inlineData": {"mimeType": "video/mp4", "data": b64_data}},
-                {"text": "이 10초짜리 비디오 클립을 보고 최대한 구체적이고 묘사적인 한국어(Korean) 텍스트 설명을 생성하세요.\n\n다음 요소들을 포함하여 기술해 주세요:\n1. 등장인물의 시각적 행동, 움직임 및 화면의 구두\n2. 주변 배경, 장소, 사물에 대한 자세한 묘사\n3. 영상에서 유추할 수 있는 인물들의 감정 상태 및 분위기\n\n규칙:\n- 불필요한 미사여구(감성적 수식어 등)를 줄이고, 사실적이고 객관적인 시각 정보 위주로 작성하세요.\n- 출력은 300자 내외의 분량으로, 의미 단위로 명확하게 끊어서 서술해 주세요.\n- 절대 영상에 보이지 않는 맥락을 지어내거나 추측하지 마세요."}
+                {"fileData": {"mimeType": "video/mp4", "fileUri": gcs_uri}},
+                {"text": "이 비디오 클립을 분석하여 묘사적인 한국어(Korean) 설명을 작성하세요.\n\n포함할 요소:\n1. 등장인물의 시각적 행동 및 움직임\n2. 주변 배경, 장소 및 사물의 디테일\n3. 화면에서 시각적으로 유추되는 긴장감이나 분위기\n\n규칙 (매우 중요):\n- '이 영상은', '이 클립은' 등의 불필요한 패키지 도입 어구를 사용하지 말고 바로 사실적 장면 묘사로 시작하세요.\n- 비디오에 나오는 영화 제목이나 브랜드 명칭을 직접 언급하지 마세요.\n- 출력은 200자 내외로 간결하게 한 단락 분량으로 작성하세요.\n- 보이지 않는 가상의 맥락이나 스토리를 지어내서 추측하지 마세요."}
 
 
             ]
@@ -199,11 +198,13 @@ def run_ffmpeg_split(video_path: str, output_pattern: str):
     ffmpeg_bin = "./bin/ffmpeg"
     command = [
         ffmpeg_bin, "-i", video_path,
+        "-threads", "0",
+        "-threads", "0",
+        "-vf", "scale=720:-1,fps=5",
         "-f", "segment",
         "-segment_time", "10",
         "-reset_timestamps", "1",
         output_pattern
-
     ]
     try:
          result = subprocess.run(command, capture_output=True, text=True, check=True)
@@ -246,61 +247,61 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
             start_time = index * 10
             end_time = (index + 1) * 10
             try:
-                with open(segment_path, "rb") as f:
-                    video_bytes = f.read()
+                # 1. Upload segment to GCS first Node creations
+                bucket_name = "jwlee-gcs-video-002"
+                blob_name = f"segments/{video_id}/segment_{index:03d}.mp4"
+                
+                try:
+                    bucket = storage_client.bucket(bucket_name)
+                    blob = bucket.blob(blob_name)
+                    blob.upload_from_filename(segment_path)
+                except Exception as upload_err:
+                    print(f"GCS Upload Failed for index {index}: {upload_err}")
+                    raise upload_err
 
-                b64_data = base64.b64encode(video_bytes).decode('utf-8')
+                gcs_url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+                # fileData uses gs:// string identifiers layout Creations
+                gcs_uri = f"gs://{bucket_name}/{blob_name}"
+
+                # 2. Call Vertex AI referencing gcs_uri Node creations
                 embedding_vector = embed_content_rest(content_payload={
-                    "parts": [{"inlineData": {"mimeType": "video/mp4", "data": b64_data}}]
+                    "parts": [{"fileData": {"mimeType": "video/mp4", "fileUri": gcs_uri}}]
                 })
 
                 description_text = ""
                 text_vector = [0.0]*3072
 
                 if embedding_vector:
-                    description_text = generate_description_rest(video_bytes)
+                    description_text = generate_description_rest(gcs_uri)
                     if description_text:
                         text_vector = embed_gemini_embedding_001_rest(description_text)
 
-                    # Upload segment to GCS Node creations
-                    bucket_name = "jwlee-gcs-video-002"
-                    blob_name = f"segments/{video_id}/segment_{index:03d}.mp4"
-                    try:
-                        bucket = storage_client.bucket(bucket_name)
-                        blob = bucket.blob(blob_name)
-                        blob.upload_from_filename(segment_path)
-                    except Exception as upload_err:
-                        print(f"GCS Upload Failed for index {index}: {upload_err}")
-                        raise upload_err
+                # Local Cleanup Item Node creations
+                try: os.remove(segment_path)
+                except: pass
 
-                    gcs_url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+                insert_row = {
+                    "id": str(uuid.uuid4()),
+                    "segment_index": index,
+                    "start_time": float(start_time),
+                    "end_time": float(end_time),
+                    "video_name": video_name,
+                    "embedding": embedding_vector,
+                    "description": description_text if description_text else "",
+                    "text_embedding": text_vector if text_vector else [0.0]*3072,
+                    "url": gcs_url
+                }
 
-                    # Local Cleanup Item Node creations
-                    try: os.remove(segment_path)
-                    except: pass
-
-                    insert_row = {
-                        "id": str(uuid.uuid4()),
-                        "segment_index": index,
-                        "start_time": float(start_time),
-                        "end_time": float(end_time),
-                        "video_name": video_name,
-                        "embedding": embedding_vector,
-                        "description": description_text if description_text else "",
-                        "text_embedding": text_vector if text_vector else [0.0]*3072,
-                        "url": gcs_url
-                    }
-
-                    metadata_row = {
-                        "index": index,
-                        "start_time": float(start_time),
-                        "end_time": float(end_time),
-                        "url": gcs_url,
-                        "dimensions": len(embedding_vector),
-                        "text_dimensions": len(text_vector) if text_vector else 0,
-                        "description": description_text if description_text else "No description"
-                    }
-                    return {"insert": insert_row, "metadata": metadata_row}
+                metadata_row = {
+                    "index": index,
+                    "start_time": float(start_time),
+                    "end_time": float(end_time),
+                    "url": gcs_url,
+                    "dimensions": len(embedding_vector),
+                    "text_dimensions": len(text_vector) if text_vector else 0,
+                    "description": description_text if description_text else "No description"
+                }
+                return {"insert": insert_row, "metadata": metadata_row}
 
             except Exception as e:
                 print(f"Error on segment {index}: {e}")
@@ -482,114 +483,96 @@ async def search_index(q: str, request: Request):
          results_fts = []
 
          async with request.app.state.pool.acquire() as conn:
-             # A. Visual Vector Dense Search
-             q_v_str = vector_to_str(query_vector)
-             try:
-                 rows_v = await conn.fetch("""
-                     SELECT id, segment_index, start_time, end_time, video_name, description, url
-                     FROM video_scenes_v4
-                     WHERE id != 'init'
-                     ORDER BY embedding <=> $1::vector
-                     LIMIT 10
-                 """, q_v_str)
-                 results_v = [dict(r) for r in rows_v]
-             except Exception as e:
-                 print(f"⚠️ Visual Search Failed: {e}")
+              q_v_str = vector_to_str(query_vector)
+              q_t_str = vector_to_str(text_vector) if text_vector else None
 
-             # B. Text Description Dense Search
-             if text_vector:
-                 q_t_str = vector_to_str(text_vector)
-                 try:
-                     rows_t = await conn.fetch("""
-                         SELECT id, segment_index, start_time, end_time, video_name, description, url
-                         FROM video_scenes_v4
-                         WHERE id != 'init'
-                         ORDER BY text_embedding <=> $1::vector
-                         LIMIT 10
-                     """, q_t_str)
-                     results_t = [dict(r) for r in rows_t]
-                 except Exception as e:
-                     print(f"⚠️ Text Search Failed: {e}")
+              single_sql = """
+              WITH visual_ranks AS (
+                  SELECT id, segment_index, start_time, end_time, video_name, description, url, 
+                         ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) as rank
+                  FROM video_scenes_v4 WHERE id != 'init' ORDER BY embedding <=> $1::vector LIMIT 10
+              ),
+              text_ranks AS (
+                  SELECT id, segment_index, start_time, end_time, video_name, description, url, 
+                         ROW_NUMBER() OVER (ORDER BY text_embedding <=> $2::vector) as rank
+                  FROM video_scenes_v4 WHERE id != 'init' AND $2::vector IS NOT NULL ORDER BY text_embedding <=> $2::vector LIMIT 10
+              ),
+              fts_ranks AS (
+                  SELECT id, segment_index, start_time, end_time, video_name, description, url, 
+                         ROW_NUMBER() OVER (ORDER BY bigm_similarity(description, $3) DESC) as rank
+                  FROM video_scenes_v4 WHERE id != 'init' AND description LIKE ALL($4::text[])
+                  ORDER BY bigm_similarity(description, $3) DESC LIMIT 10
+              ),
+              merged_scores AS (
+                  SELECT 
+                      v.id,
+                      COALESCE(1.0 / (vr.rank + 60), 0) + 
+                      1.25 * COALESCE(1.0 / (tr.rank + 60), 0) + 
+                      1.0 * COALESCE(1.0 / (fr.rank + 60), 0) AS rrf_score
+                  FROM video_scenes_v4 v
+                  LEFT JOIN visual_ranks vr ON v.id = vr.id
+                  LEFT JOIN text_ranks tr ON v.id = tr.id
+                  LEFT JOIN fts_ranks fr ON v.id = fr.id
+                  WHERE vr.id IS NOT NULL OR tr.id IS NOT NULL OR fr.id IS NOT NULL
+                  ORDER BY rrf_score DESC LIMIT 1
+              )
+              SELECT 
+                  (SELECT json_agg(vr) FROM visual_ranks vr) as results_v,
+                  (SELECT json_agg(tr) FROM text_ranks tr) as results_t,
+                  (SELECT json_agg(fr) FROM fts_ranks fr) as results_fts,
+                  (SELECT json_build_object(
+                      'id', v.id, 'segment_index', v.segment_index, 'start_time', v.start_time, 
+                      'end_time', v.end_time, 'video_name', v.video_name, 'description', v.description, 'url', v.url,
+                      'score', m.rrf_score
+                   ) FROM video_scenes_v4 v JOIN merged_scores m USING(id)) as best_item;
+              """
 
-             # C. Keyword BM25 FTS Search
-             try:
-                 rows_fts = await conn.fetch("""
-                     SELECT id, segment_index, start_time, end_time, video_name, description, url
-                     FROM video_scenes_v4
-                     WHERE id != 'init' AND to_tsvector('simple', description) @@ plainto_tsquery('simple', $1)
-                     ORDER BY ts_rank_cd(to_tsvector('simple', description), plainto_tsquery('simple', $1)) DESC
-                     LIMIT 10
-                 """, q)
-                 results_fts = [dict(r) for r in rows_fts]
-             except Exception as e:
-                 print(f"⚠️ FTS Query bypassed/failed: {e}")
+              keywords = q.split()
+              lk_array = [f"%{k}%" for k in keywords]
 
-         # 3. Reciprocal Rank Fusion (RRF)
-         print(f"\n--- 🔍 RRF Search Debug: Query='{q}' ---")
-         print(f"🎥 Video Spatial Search Results ({len(results_v)} items):")
-         for r, row in enumerate(results_v):
-              print(f"  Rank {r+1}: Seg={row['segment_index']} | {row.get('description','')[:40]}...")
-         print(f"📝 Description Vector Search Results ({len(results_t)} items):")
-         for r, row in enumerate(results_t):
-              print(f"  Rank {r+1}: Seg={row['segment_index']} | {row.get('description','')[:40]}...")
-         print(f"🔤 Keyword BM25 FTS Search Results ({len(results_fts)} items):")
-         for r, row in enumerate(results_fts):
-              print(f"  Rank {r+1}: Seg={row['segment_index']} | {row.get('description','')[:40]}...")
+              row = await conn.fetchrow(single_sql, q_v_str, q_t_str, q, lk_array)
 
-         rrf_scores = {}
-         lookup_item = {}
+         # 3. Process CTE Results Node creations
+         if not row or not row['best_item']:
+              return {"items": []}
 
-         # Video Dense ranking
-         for rank, row in enumerate(results_v):
-              item_id = row['id']
-              score = 1.0 / (rank + 60)
-              # Manual phrase boosting removed based on guidance
-              rrf_scores[item_id] = rrf_scores.get(item_id, 0) + score
-              lookup_item[item_id] = row
+         # Parse JSON outcomes Node creations
+         import json
+         # asyncpg might return strings or parsed objects depending on types setup node Creations
+         def parse_json(val):
+             if isinstance(val, str): return json.loads(val)
+             return val if val else []
 
-         # Text Dense ranking
-         for rank, row in enumerate(results_t):
-              item_id = row['id']
-              score = 1.25 * (1.0 / (rank + 60))
-              rrf_scores[item_id] = rrf_scores.get(item_id, 0) + score
-              lookup_item[item_id] = row
+         results_v = parse_json(row['results_v'])
+         results_t = parse_json(row['results_t'])
+         results_fts = parse_json(row['results_fts'])
+         best_item_raw = parse_json(row['best_item'])
 
-         # Keyword FTS ranking
-         for rank, row in enumerate(results_fts):
-              item_id = row['id']
-              score = 1.0 * (1.0 / (rank + 60)) # Fair weighting
-              rrf_scores[item_id] = rrf_scores.get(item_id, 0) + score
-              lookup_item[item_id] = row
-
-         # Sort by RRF Score descending - Top 1 only
-         sorted_items = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)[:1]
-         
          items = []
-         for item_id, score in sorted_items:
-              row = lookup_item[item_id]
+         if best_item_raw:
               items.append({
-                  "video_name": row['video_name'],
-                  "segment_index": int(row['segment_index']),
-                  "start_time": float(row['start_time']),
-                  "end_time": float(row['end_time']),
-                  "score": float(score),  # Higher is better for RRF
-                  "description": row.get("description", ""),
-                  "url": row.get("url", "")
+                  "video_name": best_item_raw['video_name'],
+                  "segment_index": int(best_item_raw['segment_index']),
+                  "start_time": float(best_item_raw['start_time']),
+                  "end_time": float(best_item_raw['end_time']),
+                  "score": float(best_item_raw['score']),
+                  "description": best_item_raw.get("description", ""),
+                  "url": best_item_raw.get("url", "")
               })
 
          diagnostics = {
               'results_v': [
                    {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_v
-              ],
+              ] if results_v else [],
               'results_t': [
                    {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_t
-              ],
+              ] if results_t else [],
               'results_fts': [
                    {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_fts
-              ]
+              ] if results_fts else []
          }
          return {'query': q, 'results': items, 'diagnostics': diagnostics}
 
     except Exception as e:
-         print(f"Search API Error: {e}")
-         raise HTTPException(status_code=500, detail=str(e))
+         print(f"Search API Error: {repr(e)}")
+         raise HTTPException(status_code=500, detail=repr(e))
