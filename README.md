@@ -27,6 +27,18 @@
 - **pg_bigm 확장 팩 활용 한국어 Full-Text Search (FTS)**: 형태소 단절 한계를 극복하기 위해 `n-gram` 인덱스 기반 `pg_bigm`의 `bigm_similarity` 점수와 다중 키워드 `LIKE ANY` 오버랩 매칭 기법을 도입하여 검색 범용성을 극대화했습니다.
 - **서버사이드 상호 순위 병합 (Single SQL CTE RRF)**: 클라이언트 레이턴시 상쇄를 위해 비주얼, 텍스트, FTS 랭킹 매칭 연산을 ALLOYDB 내부 단일 SQL `WITH` 절 쿼리로 가두어 통합 순위 결합(Reciprocal Rank Fusion)을 처리함으로써 대폭 향상된 반응속도를 구가합니다.
 
+#### 🔮 RRF (Reciprocal Rank Fusion) 상세 작동 구조
+성격이 다른 다중 검색 엔진(벡터 및 키워드)의 결과를 공정하게 병합하기 위해 아래 **RFF 공식**을 수렴 계산합니다:
+
+$$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\text{Rank}_e + 60}$$
+
+*   **분모의 `60` (Smoothing Constant)**: 상위 순위권(1~3위) 간 점수 격차가 너무 극단적으로 벌어지는 것을 차단하여 순위 변동의 완만성과 결합 안정성을 확보하는 표준 정상화 상수입니다.
+*   **각 검색 엔진별 가중치 배율 (Multipliers)**:
+    *   `🎞️ 영상 매칭 (시각)`: **`1.0`** (표준 비율)
+    *   `📝 텍스트 매칭 (설명)`: **`1.25`** (**가장 높은 비중** - Gemini 묘사문 보정력 반영)
+    *   `🔍 키워드 매칭 (FTS)`: **`1.0`** (단어 정확도 서포트)
+*   **인프라 이점**: 이 연산은 중계 서버가 아닌 **AlloyDB 내부 단일 SQL (CTE)**에서 분해 합산되므로 네트워크 오버헤드나 로컬 루프 대기 없이 0.001초의 레이턴시만 소모됩니다.
+
 ### 4. ⚡ GCS First Pipeline & 비동기 가속 (GCS-driven Async Workers)
 - **GCS 선(先) 업로딩 기반 fileData 주입**: 클립 분할 즉시 **Google Cloud Storage**로 선제 자동 푸시를 집행합니다. 메모리 팽창을 주도하는 `base64` 인코딩을 완전히 타파하고 Vertex AI 이식을 위해 GCS URI 주소(`gs://...`)를 다이렉트 바인딩 전달하여 레이턴시 부하를 소거했습니다.
 - **분배 병렬 가동 기법 (`ThreadPoolExecutor`)**: 요청 병목 절감을 위한 워커 스레드 동시 연산 체인 가중 구사.
