@@ -42,7 +42,8 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_file=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")), 
-        env_file_encoding="utf-8"
+        env_file_encoding="utf-8",
+        extra="ignore"
     )
 
 
@@ -199,18 +200,20 @@ def run_ffmpeg_split(video_path: str, output_pattern: str):
     command = [
         ffmpeg_bin, "-i", video_path,
         "-threads", "0",
-        "-threads", "0",
-        "-vf", "scale=720:-1,fps=5",
+        "-vf", "scale=720:-2,fps=5",
         "-f", "segment",
         "-segment_time", "10",
         "-reset_timestamps", "1",
         output_pattern
     ]
     try:
-         result = subprocess.run(command, capture_output=True, text=True, check=True)
-         return result.stdout
+         # Use DEVNULL for background streams to avoid pipe clogging OSError(5) Node creations
+         result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+         return ""
     except subprocess.CalledProcessError as e:
-         print(f"FFmpeg Error: {e.stderr}")
+         print(f"FFmpeg Error occurred")
+         raise e
+    except Exception as e:
          raise e
 
 async def process_video_background(video_path: str, video_name: str, video_id: str, client, pool):
@@ -500,7 +503,7 @@ async def search_index(q: str, request: Request):
               fts_ranks AS (
                   SELECT id, segment_index, start_time, end_time, video_name, description, url, 
                          ROW_NUMBER() OVER (ORDER BY bigm_similarity(description, $3) DESC) as rank
-                  FROM video_scenes_v4 WHERE id != 'init' AND description LIKE ALL($4::text[])
+                  FROM video_scenes_v4 WHERE id != 'init' AND description LIKE ANY($4::text[])
                   ORDER BY bigm_similarity(description, $3) DESC LIMIT 10
               ),
               merged_scores AS (
