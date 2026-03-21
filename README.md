@@ -7,6 +7,11 @@
 
 ---
 
+> ⚠️ **Disclaimer**  
+> 이 프로젝트에 투영된 설계 아키텍처 및 구현 코드는 **Google Antigravity**에 의해 Pair Programming 협력 형태로 구축되었습니다. 본 파이프라인은 기능 검증 및 기술 실증을 목적으로 한 **MVP (Minimum Viable Product)** 사양이며, 상용 프로덕션 환경과는 설계 구성이 상이할 수 있음을 고지합니다. Node Creations layout Node.
+
+---
+
 ## 🚀 주요 탑재 기능 (Core Features)
 
 ### 1. 🎞️ 초정밀 및 최적화된 하이라이팅 분절 (Video Split & Scaling)
@@ -23,8 +28,8 @@
 - **서버사이드 상호 순위 병합 (Single SQL CTE RRF)**: 클라이언트 레이턴시 상쇄를 위해 비주얼, 텍스트, FTS 랭킹 매칭 연산을 ALLOYDB 내부 단일 SQL `WITH` 절 쿼리로 가두어 통합 순위 결합(Reciprocal Rank Fusion)을 처리함으로써 대폭 향상된 반응속도를 구가합니다.
 
 ### 4. ⚡ GCS First Pipeline & 비동기 가속 (GCS-driven Async Workers)
-- **GCS 선(先) 업로딩 기반 fileData 주입**: 클립 분할 즉시 **Google Cloud Storage**로 선제 자동 푸시를 집행합니다. 메모리 팽창을 주도하는 `base64` 인코딩을 완전히 타파하고 Vertex API에 GCS URI 주소(`gs://...`)를 다이렉트 바인딩 전달하여 레이턴시 부하를 소거했습니다 Node Creations Node layout.
-- **분배 병렬 가동 기법 (`ThreadPoolExecutor`)**: 요청 병목 절감을 위한 워커 스레드 동시 연산 체인 가중 구사 node Creations layout.
+- **GCS 선(先) 업로딩 기반 fileData 주입**: 클립 분할 즉시 **Google Cloud Storage**로 선제 자동 푸시를 집행합니다. 메모리 팽창을 주도하는 `base64` 인코딩을 완전히 타파하고 Vertex AI 이식을 위해 GCS URI 주소(`gs://...`)를 다이렉트 바인딩 전달하여 레이턴시 부하를 소거했습니다.
+- **분배 병렬 가동 기법 (`ThreadPoolExecutor`)**: 요청 병목 절감을 위한 워커 스레드 동시 연산 체인 가중 구사.
 
 ### 5. 🧹 실시간 Vector DB 초기화 (Clear Database)
 - 대시보드 화면상 **`버튼 클릭 한 번`** 으로 AlloyDB 데이터 클리어링 및 서빙 메모리 누수를 무력화하는 자동 초기화 가변 인터페이스 공급.
@@ -80,14 +85,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 📊 진단 대시보드 아키텍처 (Diagnostics Scorecard)
 검색 실행 시, 하단 **`하이브리드 검색 세부 진단 결과 (RRF 매칭 성적표)`** 가 인지 로드됩니다.  
-비주얼과 텍스트 설명 중 어떠한 임베딩 가중 스펙트럼이 매치 순위를 뒤바꾸었는지 시각적으로 관측 및 분석할 수 있으며, 직관적인 Google Style 인터페이스로 조작이 매끄럽습니다.
+비주얼과 텍스트 설명 중 어떠한 임베딩 가중 스펙트럼이 매치 순위를 뒤바꾸었는지 시각적으로 관측 및 분석할 수 있으며, 직관적인 Google Style 인터페이스로 조작이 매끄럽끄 조절되어 매끄럽습니다.
 
 ---
 
 > 💡 **이런 분들께 유용합니다**:  
-> "비디오 임베딩만 하니 텍스트 키워드가 안 맞고, 텍스트 캡셔닝만 하니 비주얼 구도가 어긋날 때" – 두 세계를 **AlloyDB의 고밀도 벡터 연산**과 **서버 기반 RRF** 가중치 점합 노드로 교차 결합하는 최적 아키텍처 예제입니다.
-
----
-
-> ⚠️ **Disclaimer**  
-> 이 프로젝트에 투영된 설계 아키텍처 및 구현 코드는 **구글 Antigravity**에 의해 Pair Programming 협력 형태로 구축되었습니다. 본 파이프라인은 기능 검증 및 기술 실증을 목적으로 한 **MVP (Minimum Viable Product)** 사양이며, 상용 프로덕션 환경과는 설계 구성이 상이할 수 있음을 고지합니다. Node Creations layout Node.
+> "비디오 임베딩만 하니 텍스트 키워드가 안 맞고, 텍스트 캡셔닝만 하니 비주얼 구도가 어긋날 때" – 두 세계를 **AlloyDB의 고밀도 벡터 연산**과 **서버 기반 RRF** 가중치 점합 노드로 교차 결합하는 최적 아키텍처 예제입니다. Node creations Node layout Node corrected.
