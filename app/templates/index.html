@@ -637,7 +637,7 @@
                               </div>
                              <div class="card-content">
                                  <div class="time-markers">${item.start_time}s - ${item.end_time}s</div>
-                                 <h4>${item.video_name}</h4>
+                                 <h4>${item.video_name} <span style="font-size: 0.8rem; color: #10B981;">(Segment ${item.segment_index + 1})</span></h4>
                                  <div style="font-size: 0.75rem; color: #2DD4BF; margin-top: 0.5rem; line-height: 1.3;">
                                       📝 ${item.description || 'No description'}
                                  </div>
@@ -679,15 +679,15 @@
                                  </thead>
                                  <tbody>
                                      <tr>
-                                         <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🎥 영상 매칭 (시각)</td>
+                                         <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🎥 영상 매칭 (시각) <span style="color: #2DD4BF; font-size: 0.75rem;">(x1.0)</span></td>
                                          ${buildCells(data.diagnostics.results_v)}
                                      </tr>
                                      <tr>
-                                         <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">📝 텍스트 매칭 (설명)</td>
+                                         <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">📝 텍스트 매칭 (설명) <span style="color: #2DD4BF; font-size: 0.75rem;">(x1.25)</span></td>
                                          ${buildCells(data.diagnostics.results_t)}
                                      </tr>
                                       <tr>
-                                          <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🔤 키워드 매칭 (FTS)</td>
+                                          <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🔤 키워드 매칭 (FTS) <span style="color: #2DD4BF; font-size: 0.75rem;">(x1.0)</span></td>
                                           ${buildCells(data.diagnostics.results_fts || [])}
                                       </tr>
                                   </tbody>
