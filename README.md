@@ -63,6 +63,35 @@ $$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\tex
 
 ## ⚙️ 실행 및 배포 가이드 (Getting Started)
 
+### 0. 🔌 AlloyDB (PostgreSQL) 사전 준비 (Prerequisites)
+본 어플리케이션은 **대표 확장 기능(`pgvector`, `pg_bigm`)** 이 탑재된 AlloyDB 생태계 위에서 동작합니다. 클러스터 생성 후 아래 SQL을 최초 1회 실행해 주셔야 합니다.
+
+```sql
+-- 1. 필수 확장 기능 탑재
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_bigm;
+
+-- 2. 비디오 구간(Scene) 메타데이터 보관 테이블 생성
+CREATE TABLE IF NOT EXISTS video_scenes_v4 (
+    id VARCHAR(255) PRIMARY KEY,
+    segment_index INTEGER,
+    start_time DOUBLE PRECISION,
+    end_time DOUBLE PRECISION,
+    video_name VARCHAR(255),
+    embedding VECTOR(3072),               -- 🎞️ 비주얼 임베딩
+    description TEXT,                       -- 📝 콤팩트 묘사문
+    text_embedding VECTOR(3072),          -- 📝 텍스트 임베딩
+    url TEXT                                -- 📦 GCS 주소
+);
+
+-- 3. 고속 하이브리드 검색 전용 색인(Index) 구성
+-- 진형 텍스트 일치 검색용 (GIN)
+CREATE INDEX IF NOT EXISTS idx_desc_ts ON video_scenes_v4 USING gin (to_tsvector('simple', description));
+
+-- pg_bigm 바이그램 부분일치 검색용 (GIN_BIGM_OPS)
+CREATE INDEX IF NOT EXISTS idx_description_bigm ON video_scenes_v4 USING gin (description gin_bigm_ops);
+```
+
 ### 1. 선수 요구 패키지 설치
 ```bash
 # macOS (Homebrew)
