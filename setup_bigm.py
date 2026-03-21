@@ -1,9 +1,19 @@
 import asyncpg
 import asyncio
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 async def run():
     try:
-        conn = await asyncpg.connect('postgresql://postgres:DefaultSearch_1234@34.64.97.194:5432/postgres', ssl='require')
+        host = os.getenv("DB_HOST", "localhost")
+        user = os.getenv("DB_USER", "postgres")
+        password = os.getenv("DB_PASSWORD", "")
+        database = os.getenv("DB_NAME", "postgres")
+        
+        conn_str = f"postgresql://{user}:{password}@{host}:5432/{database}"
+        conn = await asyncpg.connect(conn_str, ssl='require')
         
         print("Enabling pg_bigm extension...")
         await conn.execute("CREATE EXTENSION IF NOT EXISTS pg_bigm")

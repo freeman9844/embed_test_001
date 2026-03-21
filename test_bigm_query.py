@@ -1,9 +1,19 @@
 import asyncpg
 import asyncio
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 async def run():
     try:
-        conn = await asyncpg.connect('postgresql://postgres:DefaultSearch_1234@34.64.97.194:5432/postgres', ssl='require')
+        host = os.getenv("DB_HOST", "localhost")
+        user = os.getenv("DB_USER", "postgres")
+        password = os.getenv("DB_PASSWORD", "")
+        database = os.getenv("DB_NAME", "postgres")
+        
+        conn_str = f"postgresql://{user}:{password}@{host}:5432/{database}"
+        conn = await asyncpg.connect(conn_str, ssl='require')
         rows = await conn.fetch("SELECT id, segment_index, video_name, description FROM video_scenes_v4 WHERE id != 'init'")
         print("--- Table Content ---")
         for r in rows:

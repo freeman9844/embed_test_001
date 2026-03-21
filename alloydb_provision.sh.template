@@ -1,16 +1,11 @@
 #!/bin/bash
 # 🛠️ AlloyDB Cluster & Instance 생성 스크립트
 
-# 로컬에 .env 파일이 존재하면 읽어옵니다.
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
-fi
-
-GCLOUD_BIN="${GCLOUD_BIN:-"/Users/jungwoonlee/google-cloud-sdk/bin/gcloud"}"
-PROJECT_ID=${PROJECT_ID:-"YOUR_PROJECT_ID"}
-VPC_NAME=${VPC_NAME:-"YOUR_VPC_NAME"}
-USER_IP=${USER_IP:-"YOUR_IP_ADDRESS"}
-DB_PASSWORD=${DB_PASSWORD:-"YOUR_PASSWORD"} # 테스트용 비밀번호 (지정 가능)
+GCLOUD_BIN="/Users/jungwoonlee/google-cloud-sdk/bin/gcloud"
+PROJECT_ID="YOUR_PROJECT_ID"
+VPC_NAME="YOUR_VPC_NAME"
+USER_IP="YOUR_IP_ADDRESS"
+DB_PASSWORD="YOUR_PASSWORD" # 테스트용 비밀번호 (지정 가능)
 
 echo "=== 🚀 [AlloyDB 프로비저닝 가동] ==="
 $GCLOUD_BIN config set project $PROJECT_ID

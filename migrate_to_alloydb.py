@@ -23,7 +23,16 @@ async def main():
         return
 
     # 2. Connect to AlloyDB
-    conn_str = "postgresql://postgres:DefaultSearch_1234@34.64.97.194:5432/postgres"
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    host = os.getenv("DB_HOST", "localhost")
+    user = os.getenv("DB_USER", "postgres")
+    password = os.getenv("DB_PASSWORD", "")
+    database = os.getenv("DB_NAME", "postgres")
+
+    conn_str = f"postgresql://{user}:{password}@{host}:5432/{database}"
     print("🔌 Connecting to AlloyDB...")
     try:
         conn = await asyncpg.connect(conn_str, ssl="require", timeout=10)
