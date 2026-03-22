@@ -480,6 +480,23 @@ async def clear_db(request: Request):
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/db_contents")
+async def get_db_contents(request: Request):
+    """
+    Returns list of processed videos and segment counts for Dashboard viewer Nodes
+    """
+    try:
+        async with request.app.state.pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT id, segment_index, start_time, end_time, video_name, description, url 
+                FROM video_scenes_v4 
+                WHERE id != 'init'
+                ORDER BY video_name, segment_index;
+            """)
+            return [dict(r) for r in rows]
+    except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/status/{video_id}")
 
 async def get_status(video_id: str):

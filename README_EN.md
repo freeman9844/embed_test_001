@@ -29,7 +29,12 @@
 - **OAuth Token Caching**: Isolated redundant `credentials.refresh()` inside a memory-buffered **`TokenCacheManager`** isolating authentication latency Node.
 - **Stream Chunking Upload**: Re-engineered `/api/upload` to write iterative **`1MB chunks`** ensuring extreme RAM safety for large video file buffering Node.
 
-### 5. 🧹 Real-time Vector DB Clear (Clear Database)
+### 5. 🗄️ Dashboard Sidebar & AlloyDB Detailed Viewer
+- **Standard Sidebar Navigation**: Spaces out `🔍 영상 검색` (Search) and `🗄️ 적재 데이터` (Database) views into-dedicated seamless Tab views Node Productions.
+- **Segment Detailed Grid Viewer (`/api/db_contents`)**: Unwraps video names, individual timestamps, & Gemini descriptions into a transparent spreadsheet loading array Node Productions.
+- **Client-Side Live Filter & Pagination**: Employs live reactive memory search and `Prev/Next` split pagination bottom controls keeping dashboards fluid for heavy bulk buffers index 4 Nodes.
+
+### 6. 🧹 Real-time Vector DB Clear (Clear Database)
 - Supplies an admin-facing maintenance trigger with **`one-click layout buttons`** that completely drops AlloyDB rows and zeroes serve-state caches instantly for prototype-heavy recursions.
 
 ---

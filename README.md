@@ -46,7 +46,12 @@ $$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\tex
 - **OAuth Token Caching**: 각 호출 주기마다 중복 유도되던 `credentials.refresh()`를 메모리 버퍼 관측형 **`TokenCacheManager`** 내부로 격리하여 인증 백업 네트워킹 레이턴시를 1회 주기로 물리 압축했습니다 Node.
 - **Stream Chunking 업로드**: 클라이언트 영상 수신 시 `await video.read()` 분할 적재에서 **`1MB 단위 반복 스트리밍`** 판독 루프로 리팩토링하여 소요 대역폭을 극대화 보장했습니다 Node.
 
-### 5. 🧹 실시간 Vector DB 초기화 (Clear Database)
+### 5. 🗄️ 대시보드 사이드바 및 AlloyDB 실시간 내역조회 (Sidebar Nav & DB Viewer)
+- **표준 네비게이션 사이드바**: 화면 좌측에 어플리케이션 전용 메뉴바를 배치하여 `🔍 영상 검색` 과 `🗄️ 적재 데이터` 화면 간의 무중단 스위칭을 지원합니다 Node.
+- **세그먼트 디테일 그리드 뷰 (`/api/db_contents`)**: AlloyDB에 파절 적재된 원본 비디오들의 세그먼트 구간, 타임라인 정보 및 Gemini의 묘사 디스크립션을 스프레드시트 형태로 투명하게 전개 로딩합니다 Node Productions.
+- **클라이언트 라이브 서칭 및 페이징 (Search & Pagination)**: 대용량 데이터 축적 시 화면 버벅임을 차단하기 위해 실시간 인메모리 필터링 상자와 하단 `Prev/Next` 페이징 버튼 체인을 다중 공급합니다 Nodes.
+
+### 6. 🧹 실시간 Vector DB 초기화 (Clear Database)
 - 대시보드 화면상 **`버튼 클릭 한 번`** 으로 AlloyDB 데이터 클리어링 및 서빙 메모리 누수를 무력화하는 자동 초기화 가변 인터페이스 공급.
 
 ---

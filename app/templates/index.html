@@ -279,14 +279,86 @@
             color: #FFFFFF;
             font-weight: 600;
         }
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow: hidden; /* Prevent body scroll, let containers scroll */
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+        }
+
+        /* Sidebar Styles Nodes layout */
+        .sidebar {
+            width: 240px;
+            background: #FFFFFF;
+            border-right: 1px solid var(--border);
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            height: 100vh;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .sidebar-item:hover, .sidebar-item.active {
+            background: var(--accent);
+            color: var(--primary);
+        }
+
+        .sidebar-item i { font-size: 1.1rem; }
+
+        .app-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            width: 100%;
+        }
+
+        .page-content {
+            display: none;
+            padding: 2.5rem 2rem;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .page-content.active { display: block; }
     </style>
 </head>
 <body>
 
-    <!-- Sidebar Deleted -->
+    <!-- Sidebar Node Creations layout Node corrected -->
+    <div class="sidebar">
+        <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--primary); margin-bottom: 2rem; display:flex; align-items:center; gap:0.5rem;">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> Scene Intel
+        </h2>
+        <div class="sidebar-item active" onclick="switchPage('search')">
+            <i class="fa-solid fa-magnifying-glass"></i> 영상 검색
+        </div>
+        <div class="sidebar-item" onclick="switchPage('database')">
+            <i class="fa-solid fa-database"></i> 적재 데이터
+        </div>
+    </div>
 
-    <!-- Main View -->
-    <div class="main-content">
+    <!-- App Container -->
+    <div class="app-container">
+        <!-- Search Page -->
+        <div id="page-search" class="page-content active">
         <header>
             <h1>Scene Intelligence</h1>
             <p>Multimodal Video Semantic Search using Vertex AI and Gemini Embedding 2</p>
@@ -685,7 +757,7 @@
                                      <tr>
                                          <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">📝 텍스트 매칭 (설명) <span style="color: #2DD4BF; font-size: 0.75rem;">(x1.0)</span></td>
                                          ${buildCells(data.diagnostics.results_t)}
-                                     </tr>
+                                      </tr>
                                       <tr>
                                           <td style="padding: 0.75rem; font-weight: bold; color: #94A3B8; background: #0F172A; border: 1px solid #334155;">🔤 키워드 매칭 (FTS) <span style="color: #2DD4BF; font-size: 0.75rem;">(x1.0)</span></td>
                                           ${buildCells(data.diagnostics.results_fts || [])}
@@ -696,10 +768,136 @@
                         resultsGrid.appendChild(diagPanel);
                    }
               })
-             .catch(err => {
-                  resultsGrid.innerHTML = `<div style="color: #EF4444">Search Error: ${err.message}</div>`;
-             });
-        }
+              .catch(err => {
+                   resultsGrid.innerHTML = `<div style="color: #EF4444">Search Error: ${err.message}</div>`;
+              });
+         }
+
+         let dbRowsData = [];
+         let dbFilteredData = [];
+         let dbCurrentPage = 1;
+         const dbItemsPerPage = 12;
+
+         function switchPage(pageId) {
+             document.querySelectorAll('.page-content').forEach(p => p.classList.remove('active'));
+             document.querySelectorAll('.sidebar-item').forEach(p => p.classList.remove('active'));
+             
+             document.getElementById('page-'+pageId).classList.add('active');
+             event.currentTarget.classList.add('active');
+     
+             if(pageId === 'database') loadDatabase();
+         }
+     
+         async function loadDatabase() {
+             const tbody = document.getElementById('db-table-body');
+             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">데이터를 불러오는 중...</td></tr>';
+             
+             try {
+                 const resp = await fetch('/api/db_contents');
+                 dbRowsData = await resp.json();
+                 dbFilteredData = [...dbRowsData];
+                 dbCurrentPage = 1;
+                 
+                 const searchInput = document.getElementById('db-search-input');
+                 if(searchInput) searchInput.value = ''; // Reset search focus Node Creations layout
+                 
+                 renderDatabase();
+             } catch(e) {
+                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">조회 실패</td></tr>';
+             }
+         }
+
+         function filterDatabase() {
+              const query = document.getElementById('db-search-input').value.toLowerCase().trim();
+              if(!query) {
+                   dbFilteredData = [...dbRowsData];
+              } else {
+                   dbFilteredData = dbRowsData.filter(item => 
+                       (item.video_name && item.video_name.toLowerCase().includes(query)) ||
+                       (item.description && item.description.toLowerCase().includes(query))
+                   );
+              }
+              dbCurrentPage = 1;
+              renderDatabase();
+         }
+
+         function renderDatabase() {
+              const tbody = document.getElementById('db-table-body');
+              const start = (dbCurrentPage - 1) * dbItemsPerPage;
+              const end = start + dbItemsPerPage;
+              const pageData = dbFilteredData.slice(start, end);
+
+              if(pageData.length === 0) {
+                   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-muted);">조건에 부합하는 데이터가 없습니다.</td></tr>';
+                   document.getElementById('db-pagination').innerHTML = '';
+                   return;
+              }
+
+              tbody.innerHTML = pageData.map(item => `
+                   <tr style="border-bottom: 1px solid #F1F4F8; font-size: 0.85rem;">
+                       <td style="padding: 10px 12px; font-weight: 600; color:var(--text-main); max-width: 200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${item.video_name}">${item.video_name.split('/').pop()}</td>
+                       <td style="padding: 10px 12px; text-align:center;">#${item.segment_index + 1}</td>
+                       <td style="padding: 10px 12px; color:var(--primary); font-weight:600;">${item.start_time}s - ${item.end_time}s</td>
+                       <td style="padding: 10px 12px; color:var(--text-muted); max-width: 300px; font-size: 0.8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${item.description || 'No description'}">${item.description || '-'}</td>
+                       <td style="padding: 10px 12px;">
+                            ${item.url ? `<button class="search-btn" style="padding: 4px 10px; font-size:0.7rem; border-radius:12px;" onclick="window.open('${item.url}', '_blank')"><i class="fa-solid fa-play"></i> GCS</button>` : `<span style="color:var(--text-muted); font-size:0.8rem;">No URL</span>`}
+                       </td>
+                   </tr>
+              `).join('');
+
+              renderDatabasePagination();
+         }
+
+         function renderDatabasePagination() {
+              const container = document.getElementById('db-pagination');
+              const totalPages = Math.ceil(dbFilteredData.length / dbItemsPerPage);
+              if(totalPages <= 1) { container.innerHTML = ''; return; }
+
+              container.innerHTML = `
+                   <button class="search-btn" style="padding: 6px 12px; font-size:0.8rem; border-radius:8px;" onclick="dbCurrentPage=Math.max(1, dbCurrentPage-1); renderDatabase()" ${dbCurrentPage===1?'disabled style="opacity:0.5; cursor:default;"':''}><i class="fa-solid fa-chevron-left"></i> Prev</button>
+                   <span style="font-weight:600; color:var(--text-main); font-size:0.9rem;">\${dbCurrentPage} / \${totalPages}</span>
+                   <button class="search-btn" style="padding: 6px 12px; font-size:0.8rem; border-radius:8px;" onclick="dbCurrentPage=Math.min(\${totalPages}, dbCurrentPage+1); renderDatabase()" ${dbCurrentPage===totalPages?'disabled style="opacity:0.5; cursor:default;"':''}>Next <i class="fa-solid fa-chevron-right"></i></button>
+              `;
+         }
     </script>
+
+    </div> <!-- Close page-search -->
+
+    <!-- Database Page -->
+    <div id="page-database" class="page-content">
+         <header style="text-align:center; margin-bottom:2.5rem;">
+             <h1 style="font-size: 2.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem;">적재 데이터 (AlloyDB)</h1>
+             <p style="color: var(--text-muted); font-size: 1rem;">AlloyDB for PostgreSQL에 적재된 영상 목록 및 디비 가용 수량입니다 Nodes</p>
+         </header>
+
+         <!-- DB Search Filter -->
+         <div class="search-box" style="margin-bottom:1.5rem; max-width:400px; margin-left:auto;">
+              <div class="search-input-wrapper">
+                   <i class="fa-solid fa-magnifying-glass"></i>
+                   <input type="text" id="db-search-input" placeholder="비디오명 또는 설명 검색..." oninput="filterDatabase()" style="width:100% !important;">
+              </div>
+         </div>
+
+         <div class="glass-card" style="padding: 0; overflow:hidden;">
+              <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                   <thead>
+                        <tr style="background: #F8F9FA; border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 0.85rem;">
+                             <th style="padding: 12px;">Video (File)</th>
+                             <th style="padding: 12px; text-align:center;">Segment</th>
+                             <th style="padding: 12px;">Time Range</th>
+                             <th style="padding: 12px;">Description</th>
+                             <th style="padding: 12px;">Options</th>
+                        </tr>
+                   </thead>
+                   <tbody id="db-table-body">
+                        <tr><td colspan="3" style="text-align:center; padding: 25px; color:var(--text-muted);">데이터를 불러오는 중...</td></tr>
+                   </tbody>
+              </table>
+         </div>
+
+         <!-- DB Pagination Bottom -->
+         <div id="db-pagination" style="display:flex; justify-content:center; align-items:center; gap:1.5rem; margin-top:1.5rem;"></div>
+    </div>
+    </div> <!-- Close app-container -->
 </body>
 </html>
