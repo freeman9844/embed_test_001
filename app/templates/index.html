@@ -282,7 +282,7 @@
         body {
             background-color: var(--bg-color);
             color: var(--text-main);
-            min-height: 100vh;
+            height: 100vh;
             overflow: hidden; /* Prevent body scroll, let containers scroll */
             display: flex;
             flex-direction: row;
@@ -347,6 +347,9 @@
         <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--primary); margin-bottom: 2rem; display:flex; align-items:center; gap:0.5rem;">
             <i class="fa-solid fa-wand-magic-sparkles"></i> Scene Intel
         </h2>
+        <div class="sidebar-item" onclick="switchPage('upload')">
+            <i class="fa-solid fa-cloud-arrow-up"></i> 영상 업로드
+        </div>
         <div class="sidebar-item active" onclick="switchPage('search')">
             <i class="fa-solid fa-magnifying-glass"></i> 영상 검색
         </div>
@@ -357,22 +360,20 @@
 
     <!-- App Container -->
     <div class="app-container">
-        <!-- Search Page -->
-        <div id="page-search" class="page-content active">
-        <header>
-            <h1>Scene Intelligence</h1>
-            <p>Multimodal Video Semantic Search using Vertex AI and Gemini Embedding 2</p>
-        </header>
-
-        <div class="grid-container">
-            <!-- Part 1: Upload & Indexing -->
+        <!-- Upload Page -->
+        <div id="page-upload" class="page-content">
+            <header>
+                <h1>Upload Video</h1>
+                <p>Gemini 임베딩 및 인덱싱을 위한 비디오 업로드 화면입니다 Nodes</p>
+            </header>
+            
             <div class="glass-card">
                 <div class="status-header">
                     <h2>Upload Video</h2>
                     <span class="badge" id="active-status">Idle</span>
                 </div>
                 
-                <div class="upload-zone" id="drop-zone">
+                <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
                     <i class="fa-solid fa-circle-arrow-up upload-icon"></i>
                     <h3>Drag & Drop video file here</h3>
                     <p>Supports MP4 and MOV (Auto splits to 10s chunks)</p>
@@ -402,6 +403,30 @@
                     </div>
                 </div>
             </div>
+        
+         <!-- Indexed Segments Section -->
+<!-- Indexed Segments Section -->
+        <div class="glass-card" style="margin-top: 2rem; display: none; grid-column: span 2;" id="segments-section">
+            <div class="status-header">
+                <h2>Indexed Video Clips</h2>
+                <span class="badge" id="segment-count">0 Clips</span>
+            </div>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
+               Below are the 10-second clips saved, along with dimensions retrieved from multimodal embeddings.
+            </p>
+            <div class="results-grid" id="segments-grid">
+                <!-- Dynamic rendering outputs -->
+            </div>
+        </div>
+</div>
+
+        <!-- Search Page -->
+        <div id="page-search" class="page-content active">
+            <header>
+                <h1>Scene Intelligence</h1>
+                <p>Multimodal Video Semantic Search using Vertex AI and Gemini Embedding 2</p>
+            </header>
+
 
             <!-- Part 2: Search Box index items -->
             <div class="glass-card">
@@ -416,26 +441,21 @@
                     </button>
                 </div>
 
-                <h3>Top Matches</h3>
-                <div class="results-grid" id="results-grid">
-                    <!-- Dynamic rendering outputs -->
                 </div>
-            </div>
+            
+         <!-- 3. Bottom Full Width Panel for Dashboard Results Nodes template creations -->
+<!-- 3. Bottom Full Width Panel for Dashboard Results Nodes template creations -->
+        <div class="glass-card" style="margin-top: 1.5rem;" id="results-section">
+             <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-main); margin-bottom: 1.25rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> 검색 매칭 결과 (Top Matches)</h2>
+             <div class="results-grid" id="results-grid" style="grid-template-columns: 1fr;">
+                  <!-- Dynamic rendering outputs -->
+             </div>
+</div>
+        
+        </div>
         </div>
 
-        <!-- Indexed Segments Section -->
-        <div class="glass-card" style="margin-top: 2rem; display: none; grid-column: span 2;" id="segments-section">
-            <div class="status-header">
-                <h2>Indexed Video Clips</h2>
-                <span class="badge" id="segment-count">0 Clips</span>
-            </div>
-            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 1rem;">
-               Below are the 10-second clips saved, along with dimensions retrieved from multimodal embeddings.
-            </p>
-            <div class="results-grid" id="segments-grid">
-                <!-- Dynamic rendering outputs -->
-            </div>
-        </div>
+        
 
     </div>
 
@@ -698,14 +718,15 @@
                         return;
                    }
 
-                   // 1. Render Top Match Cards
-                   data.results.forEach(item => {
+                   // 1. Render ONLY Top #1 Match Card in Main Results Grid Nodes
+                   if (data.results && data.results[0]) {
+                        const item = data.results[0];
                         const card = document.createElement('div');
                         card.className = "video-card";
                         card.innerHTML = `
-                              <div class="card-cover" style="height: auto; padding: 0.5rem;">
-                                  <video src="${item.url}" controls style="width: 100%; border-radius: 12px; max-height: 180px;"></video>
-                                  <div class="score-indicator" style="top: 1rem; right: 1rem;">RRF: ${item.score.toFixed(4)}</div>
+                              <div class="card-cover" style="height: auto; padding: 0.5rem; display: flex; justify-content: center; background: #000; border-radius: 12px 12px 0 0; position: relative;">
+                                  <video src="${item.url}" controls style="max-width: 100%; max-height: 220px; border-radius: 8px;"></video>
+                                  <div class="score-indicator" style="top: 1rem; right: 1rem;">RRF #1: ${item.score.toFixed(4)}</div>
                               </div>
                              <div class="card-content">
                                  <div class="time-markers">${item.start_time}s - ${item.end_time}s</div>
@@ -716,7 +737,7 @@
                              </div>
                         `;
                         resultsGrid.appendChild(card);
-                   });
+                   }
 
                    // 2. Render Diagnostics Table
                    if (data.diagnostics) {
@@ -730,7 +751,8 @@
                                       // Escape potential single quotes from description
                                       const cleanDesc = arr[i].description.replace(/'/g, "\\'");
                                       const videoLabel = arr[i].video_name ? `<br><span style="font-size:0.65rem; color:#94A3B8; display:block; margin-top:3px;">(${arr[i].video_name.split('/').pop().slice(-15)})</span>` : '';
-                                      cells += `<td style="padding: 0.75rem; border: 1px solid #334155;" title="${cleanDesc}">Segment ${arr[i].segment_index + 1}${videoLabel}</td>`;
+                                      const scoreLabel = arr[i].score !== undefined ? `<br><span style="font-size:0.75rem; color:#10B981; font-weight:600;">Score: ${arr[i].score.toFixed(4)}</span>` : '';
+                                      cells += `<td style="padding: 0.75rem; border: 1px solid #334155;" title="${cleanDesc}">Segment ${arr[i].segment_index + 1}${videoLabel}${scoreLabel}</td>`;
                                  } else {
                                       cells += `<td style="padding: 0.75rem; border: 1px solid #334155; color: #475569;">-</td>`;
                                 }
@@ -767,6 +789,36 @@
                         `;
                         resultsGrid.appendChild(diagPanel);
                    }
+
+                   // 3. Render Rank #1 ~ #6 Sections at the Very Bottom Nodes
+                   const rankPanel = document.createElement('div');
+                   rankPanel.style = "margin-top: 2.5rem; grid-column: 1 / -1; width: 100%;";
+                   rankPanel.innerHTML = `<h4 style="margin-bottom: 1.2rem; color: var(--text-main); font-weight: 600; display:flex; align-items:center; gap:0.5rem;"><i class="fa-solid fa-ranking-star"></i> 📊 RRF 종합 검색 순위 (Rank #1 ~ #6)</h4>`;
+                   
+                   const rankGrid = document.createElement('div');
+                   rankGrid.style = "display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.25rem;";
+                   
+                   data.results.forEach((item, idx) => {
+                        const card = document.createElement('div');
+                        card.className = "video-card";
+                        card.innerHTML = `
+                              <div class="card-cover" style="height: auto; padding: 0.5rem; display: flex; justify-content: center; background: #000; border-radius: 12px 12px 0 0; position: relative;">
+                                  <video src="${item.url}" style="max-width: 100%; max-height: 160px; border-radius: 8px;"></video>
+                                  <div class="score-indicator" style="top: 1rem; right: 1rem; background:var(--primary);">#${idx + 1} | ${item.score.toFixed(4)}</div>
+                              </div>
+                             <div class="card-content">
+                                 <div class="time-markers">${item.start_time}s - ${item.end_time}s</div>
+                                 <h4 style="font-size:0.85rem;">${item.video_name.split('/').pop()} <span style="font-size: 0.75rem; color: #10B981;">(Seg ${item.segment_index + 1})</span></h4>
+                                 <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; line-height: 1.3; max-height: 3em; overflow:hidden; text-overflow:ellipsis;">
+                                      ${item.description || 'No description'}
+                                 </div>
+                                 <button class="search-btn" style="width:100%; margin-top:0.75rem; padding:6px; font-size:0.75rem;" onclick="window.open('${item.url}', '_blank')"><i class="fa-solid fa-play"></i> GCS Stream</button>
+                             </div>
+                        `;
+                        rankGrid.appendChild(card);
+                   });
+                   rankPanel.appendChild(rankGrid);
+                   resultsGrid.appendChild(rankPanel);
               })
               .catch(err => {
                    resultsGrid.innerHTML = `<div style="color: #EF4444">Search Error: ${err.message}</div>`;
@@ -855,8 +907,8 @@
 
               container.innerHTML = `
                    <button class="search-btn" style="padding: 6px 12px; font-size:0.8rem; border-radius:8px;" onclick="dbCurrentPage=Math.max(1, dbCurrentPage-1); renderDatabase()" ${dbCurrentPage===1?'disabled style="opacity:0.5; cursor:default;"':''}><i class="fa-solid fa-chevron-left"></i> Prev</button>
-                   <span style="font-weight:600; color:var(--text-main); font-size:0.9rem;">\${dbCurrentPage} / \${totalPages}</span>
-                   <button class="search-btn" style="padding: 6px 12px; font-size:0.8rem; border-radius:8px;" onclick="dbCurrentPage=Math.min(\${totalPages}, dbCurrentPage+1); renderDatabase()" ${dbCurrentPage===totalPages?'disabled style="opacity:0.5; cursor:default;"':''}>Next <i class="fa-solid fa-chevron-right"></i></button>
+                   <span style="font-weight:600; color:var(--text-main); font-size:0.9rem;">${dbCurrentPage} / ${totalPages}</span>
+                   <button class="search-btn" style="padding: 6px 12px; font-size:0.8rem; border-radius:8px;" onclick="dbCurrentPage=Math.min(${totalPages}, dbCurrentPage+1); renderDatabase()" ${dbCurrentPage===totalPages?'disabled style="opacity:0.5; cursor:default;"':''}>Next <i class="fa-solid fa-chevron-right"></i></button>
               `;
          }
     </script>

@@ -10,3 +10,4 @@ aiofiles
 numpy
 pydantic-settings
 dpkt
+httpx==0.28.1

@@ -572,17 +572,17 @@ async def search_index(q: str, request: Request):
                   LEFT JOIN text_ranks tr ON v.id = tr.id
                   LEFT JOIN fts_ranks fr ON v.id = fr.id
                   WHERE vr.id IS NOT NULL OR tr.id IS NOT NULL OR fr.id IS NOT NULL
-                  ORDER BY rrf_score DESC LIMIT 1
+                  ORDER BY rrf_score DESC LIMIT 6
               )
               SELECT 
                   (SELECT json_agg(vr) FROM visual_ranks vr) as results_v,
                   (SELECT json_agg(tr) FROM text_ranks tr) as results_t,
                   (SELECT json_agg(fr) FROM fts_ranks fr) as results_fts,
-                  (SELECT json_build_object(
+                  (SELECT json_agg(json_build_object(
                       'id', v.id, 'segment_index', v.segment_index, 'start_time', v.start_time, 
                       'end_time', v.end_time, 'video_name', v.video_name, 'description', v.description, 'url', v.url,
                       'score', m.rrf_score
-                   ) FROM video_scenes_v4 v JOIN merged_scores m USING(id)) as best_item;
+                   )) FROM video_scenes_v4 v JOIN merged_scores m USING(id)) as best_items;
               """
 
               keywords = q.split()
@@ -591,7 +591,7 @@ async def search_index(q: str, request: Request):
               row = await conn.fetchrow(single_sql, q_v_str, q_t_str, q, lk_array)
 
          # 3. Process CTE Results Node creations
-         if not row or not row['best_item']:
+         if not row or not row['best_items']:
               return {"items": []}
 
          # Parse JSON outcomes Node creations
@@ -604,19 +604,21 @@ async def search_index(q: str, request: Request):
          results_v = parse_json(row['results_v'])
          results_t = parse_json(row['results_t'])
          results_fts = parse_json(row['results_fts'])
-         best_item_raw = parse_json(row['best_item'])
+         best_items_raw = parse_json(row['best_items'])
 
          items = []
-         if best_item_raw:
-              items.append({
-                  "video_name": best_item_raw['video_name'],
-                  "segment_index": int(best_item_raw['segment_index']),
-                  "start_time": float(best_item_raw['start_time']),
-                  "end_time": float(best_item_raw['end_time']),
-                  "score": float(best_item_raw['score']),
-                  "description": best_item_raw.get("description", ""),
-                  "url": best_item_raw.get("url", "")
-              })
+         if best_items_raw:
+              for b_item in best_items_raw:
+                   items.append({
+                       "video_name": b_item.get('video_name', ''),
+                       "segment_index": int(b_item.get('segment_index', 0)),
+                       "start_time": float(b_item.get('start_time', 0.0)),
+                       "end_time": float(b_item.get('end_time', 0.0)),
+                       "score": float(b_item.get('score', 0.0)),
+                       "description": b_item.get("description", ""),
+                       "url": b_item.get("url", "")
+                   })
+         items.sort(key=lambda x: x['score'], reverse=True)
 
          diagnostics = {
               'results_v': [

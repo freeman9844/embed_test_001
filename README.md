@@ -46,10 +46,10 @@ $$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\tex
 - **OAuth Token Caching**: 각 호출 주기마다 중복 유도되던 `credentials.refresh()`를 메모리 버퍼 관측형 **`TokenCacheManager`** 내부로 격리하여 인증 백업 네트워킹 레이턴시를 1회 주기로 물리 압축했습니다 Node.
 - **Stream Chunking 업로드**: 클라이언트 영상 수신 시 `await video.read()` 분할 적재에서 **`1MB 단위 반복 스트리밍`** 판독 루프로 리팩토링하여 소요 대역폭을 극대화 보장했습니다 Node.
 
-### 5. 🗄️ 대시보드 사이드바 및 AlloyDB 실시간 내역조회 (Sidebar Nav & DB Viewer)
-- **표준 네비게이션 사이드바**: 화면 좌측에 어플리케이션 전용 메뉴바를 배치하여 `🔍 영상 검색` 과 `🗄️ 적재 데이터` 화면 간의 무중단 스위칭을 지원합니다 Node.
-- **세그먼트 디테일 그리드 뷰 (`/api/db_contents`)**: AlloyDB에 파절 적재된 원본 비디오들의 세그먼트 구간, 타임라인 정보 및 Gemini의 묘사 디스크립션을 스프레드시트 형태로 투명하게 전개 로딩합니다 Node Productions.
-- **클라이언트 라이브 서칭 및 페이징 (Search & Pagination)**: 대용량 데이터 축적 시 화면 버벅임을 차단하기 위해 실시간 인메모리 필터링 상자와 하단 `Prev/Next` 페이징 버튼 체인을 다중 공급합니다 Nodes.
+### 5. 🗄️ 대시보드 사이드바 기반 다중 서브페이지 (Sidebar Nav & Scoped UX)
+- **독립된 뷰포트 네비게이션**: 화면 좌측에 사이드바를 공급하여 `🔍 영상 검색`, `📤 영상 업로드`, `🗄️ 적재 데이터` 3개의 전용 패널 간 무중단 스위칭을 지원합니다 Node.
+- **화면별 구성요소 지능형 스코핑(Conditional Scope)**: '검색 매칭 결과(Top Matches)'는 영상 검색 시에만, '인덱스 비디오 클립(Indexed Clips)'은 영상 업로드 시에만 출력되도록 뷰 영역이 컴포넌트 단위로 격리되어 깔끔한 UX를 유지합니다 Nodes.
+- **세그먼트 디테일 그리드 뷰 및 페이징**: AlloyDB에 적재된 세그먼트 구간, 타임라인 정보 및 Gemini 묘사를 스프레드시트 형태로 정렬 전개하며, 대용량 관측 버벅임을 차단하기 위해 `Prev/Next` 하단 페이징 체인이 함께 작동합니다 Nodes.
 
 ### 6. 🧹 실시간 Vector DB 초기화 (Clear Database)
 - 대시보드 화면상 **`버튼 클릭 한 번`** 으로 AlloyDB 데이터 클리어링 및 서빙 메모리 누수를 무력화하는 자동 초기화 가변 인터페이스 공급.
@@ -132,9 +132,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ---
 
-## 📊 진단 대시보드 아키텍처 (Diagnostics Scorecard)
-검색 실행 시, 하단 **`하이브리드 검색 세부 진단 결과 (RRF 매칭 성적표)`** 가 인지 로드됩니다.  
-각 검색 엔진의 RRF 지분율 가중치(`x1.25` 등)와 매칭된 파일의 개별 분절 순번(`Segment No.`)이 동적으로 수치화되어 표현됨으로, 비주얼과 텍스트 설명 중 어떠한 임베딩 가중 스펙트럼이 매치 순위를 뒤바꾸었는지 시각적으로 관측 및 분석할 수 있으며, 직관적인 Google Style 인터페이스로 조작이 매끄럽습니다.
+### 📊 진단 대시보드 아키텍처 (Diagnostics Scorecard)
+검색 실행 시 하단 **`하이브리드 검색 세부 진단 결과 (RRF 매칭 성적표)`** 가 로드됩니다.  
+비주얼과 텍스트 매칭 각 셀 마다 교차 세그먼트 고유 `.score` (cosine_sim / bigm_sim) 세부 연산 표기 및 비디오 비율 원본 유지 정방정렬 처리가 가미되어 분석에 매우 직관적입니다 Node Productions layout. Node Creations.
 
 ---
 
