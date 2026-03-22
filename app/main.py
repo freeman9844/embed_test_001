@@ -277,7 +277,7 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
                 if embedding_vector:
                     description_text = generate_description_rest(gcs_uri)
                     if description_text:
-                        text_vector = embed_gemini_embedding_001_rest(description_text)
+                        text_vector = embed_content_rest(content_payload={"parts": [{"text": description_text}]})
 
                 # Local Cleanup Item Node creations
                 try: os.remove(segment_path)
@@ -475,7 +475,7 @@ async def search_index(q: str, request: Request):
     try:
          # 2. Embed textual query
          query_vector = embed_content_rest(content_payload={"parts": [{"text": q}]})
-         text_vector = embed_gemini_embedding_001_rest(q)
+         text_vector = embed_content_rest(content_payload={"parts": [{"text": q}]})
 
          if not query_vector:
              raise HTTPException(status_code=500, detail="Failed to produce query embedding")
@@ -509,8 +509,8 @@ async def search_index(q: str, request: Request):
               merged_scores AS (
                   SELECT 
                       v.id,
-                      COALESCE(1.0 / (vr.rank + 60), 0) + 
-                      1.25 * COALESCE(1.0 / (tr.rank + 60), 0) + 
+                      1.25 * COALESCE(1.0 / (vr.rank + 60), 0) + 
+                      1.0 * COALESCE(1.0 / (tr.rank + 60), 0) + 
                       1.0 * COALESCE(1.0 / (fr.rank + 60), 0) AS rrf_score
                   FROM video_scenes_v4 v
                   LEFT JOIN visual_ranks vr ON v.id = vr.id
