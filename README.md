@@ -20,7 +20,7 @@
 ### 2. 🧠 다중 임베딩 가동 체인 (Diverse Embedding Fusion)
 - **비주얼/멀티모달 임베딩 (`gemini-embedding-2-preview`)**: Vertex AI 차세대 임베딩을 이용해 영상의 **시각적 구도, 사물, 동적 피사체의 변화**를 다차원 벡터 스페이스에 투영합니다.
 - **텍스츄얼 설명문 생성 (`gemini-3.1-flash-lite-preview`)**: 각 클립의 시각 정보를 불필요한 미사여구와 반복 도입부를 제거하고 **200자 내외**의 콤팩트한 사실적 묘사문으로 자동 생성하여 의미적 보정을 덧댑니다.
-- **텍스츄얼 덴스 임베딩 (`gemini-embedding-001`)**: 생성된 구조 묘사문은 구글의 전용 덴스 임베딩 엔진을 타고 **3072차원** 초정밀 밀집 벡터로 퓨전됩니다.
+- **교차 모달 벡터 공간 일치화 (`gemini-embedding-2-preview`)**: 텍스트 설명문 또한 비주얼과 동일한 차세대 멀티모달 임베딩 모델을 이용해 3072차원 퓨전 처리를 수행합니다. 물리적으로 같은 공간에 안착되어 코사인 거리 분석 상 시너지를 구가합니다.
 
 ### 3. ⚖️ AlloyDB 서버 기반 하이브리드 RRF 및 pg_bigm 통합 (Server-Side Hybrid Fusion)
 - **AlloyDB pgvector 벡테 검색**: 비주얼 및 텍스트 벡터는 ALLOYDB의 `<=>` 코사인 거리 연산자를 통해 고속 근사 연산됩니다.
@@ -55,7 +55,7 @@ $$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\tex
 | **Backend** | `FastAPI` (Async Streaming), `Jinja2` |
 | **Vector DB** | **`AlloyDB for PostgreSQL`** (`pgvector` + **`pg_bigm` 확장 탑재**) |
 | **Cloud Storage** | **`Google Cloud Storage`** (GCS First 백업 & 다이렉트 스트리밍 서빙) |
-| **Embedding / LLM** | `gemini-embedding-2-preview`, `gemini-embedding-001`, `gemini-3.1-flash-lite-preview` |
+| **Embedding / LLM** | `gemini-embedding-2-preview`, `gemini-3.1-flash-lite-preview` |
 | **Media Processing**| `FFmpeg` (Multi-threaded Compression & Scaling) |
 | **Frontend** | `Vanilla HTML/CSS/JS`, `Google Material 3 Style` |
 
