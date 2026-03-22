@@ -140,3 +140,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 > 💡 **이런 분들께 유용합니다**:  
 > "비디오 임베딩만 하니 텍스트 키워드가 안 맞고, 텍스트 캡셔닝만 하니 비주얼 구도가 어긋날 때" – 두 세계를 **AlloyDB의 고밀도 벡터 연산**과 **서버 기반 RRF** 가중치 점합 노드로 교차 결합하는 최적 아키텍처 예제입니다. Node creations Node layout Node corrected.
+
+---
+
+## 🖼️ 대시보드 샘플 화면 (Dashboard Preview)
+
+![Dashboard Sample](app/static/images/sample_ui.png)
