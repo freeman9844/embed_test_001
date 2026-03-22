@@ -39,9 +39,12 @@ $$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\tex
     *   `🔍 키워드 매칭 (FTS)`: **`1.0`** (단어 정확도 서포트)
 *   **인프라 이점**: 이 연산은 중계 서버가 아닌 **AlloyDB 내부 단일 SQL (CTE)**에서 분해 합산되므로 네트워크 오버헤드나 로컬 루프 대기 없이 0.001초의 레이턴시만 소모됩니다.
 
-### 4. ⚡ GCS First Pipeline & 비동기 가속 (GCS-driven Async Workers)
+### 4. ⚡ 완전 비동기 아키텍처 및 고성능 파이프라인 (Fully Async & httpx API)
 - **GCS 선(先) 업로딩 기반 fileData 주입**: 클립 분할 즉시 **Google Cloud Storage**로 선제 자동 푸시를 집행합니다. 메모리 팽창을 주도하는 `base64` 인코딩을 완전히 타파하고 Vertex AI 이식을 위해 GCS URI 주소(`gs://...`)를 다이렉트 바인딩 전달하여 레이턴시 부하를 소거했습니다.
-- **분배 병렬 가동 기법 (`ThreadPoolExecutor`)**: 요청 병목 절감을 위한 워커 스레드 동시 연산 체인 가중 구사.
+- **httpx 비동기 레이어**: `requests` 연산을 전면 `httpx.AsyncClient`로 전환해 동기 I/O 블로킹 오버헤드를 타파했습니다 Node.
+- **asyncio.gather 및 Semaphore 동시성**: `ThreadPoolExecutor` 를 삭제하고 **`asyncio.Semaphore(5)`** 하부 통제 속의 **`asyncio.gather`** 구조로 변경하여 워커 스레드 스위칭 소모율을 0%에 근접하도록 가압 최적화했습니다 Node.
+- **OAuth Token Caching**: 각 호출 주기마다 중복 유도되던 `credentials.refresh()`를 메모리 버퍼 관측형 **`TokenCacheManager`** 내부로 격리하여 인증 백업 네트워킹 레이턴시를 1회 주기로 물리 압축했습니다 Node.
+- **Stream Chunking 업로드**: 클라이언트 영상 수신 시 `await video.read()` 분할 적재에서 **`1MB 단위 반복 스트리밍`** 판독 루프로 리팩토링하여 소요 대역폭을 극대화 보장했습니다 Node.
 
 ### 5. 🧹 실시간 Vector DB 초기화 (Clear Database)
 - 대시보드 화면상 **`버튼 클릭 한 번`** 으로 AlloyDB 데이터 클리어링 및 서빙 메모리 누수를 무력화하는 자동 초기화 가변 인터페이스 공급.

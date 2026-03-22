@@ -22,9 +22,12 @@
 - **PostgreSQL Full-Text Search (FTS)**: Cross-references morph-based keyword weights via `to_tsvector` and `plainto_tsquery` together with `ts_rank_cd` scoring systems.
 - **3-Way Reciprocal Rank Fusion (RRF)**: Weighs and merges Visual dense vectors, Text dense vectors, and Keyword FTS ranks fairly using Reciprocal Rank Fusion (RRF) standards to determine absolute winning clip scenes.
 
-### 4. ⚡ GCS Media Storage & Threaded Acceleration
-- **Background Cloud Storage Worker**: Segmented `.mp4` files are immediately dispatched into the **Google Cloud Storage** bucket (`gs://jwlee-gcs-video-002`) to maintain zero footprint loads inside server disk mounts.
-- **Parallel processing dispatch (`ThreadPoolExecutor`)**: Offsets concurrent API dispatch latency chains, achieving **up to 70%** accelerated mass index loads.
+### 4. ⚡ Fully Async Architecture & High-Performance Pipeline
+- **Background Cloud Storage Worker**: Segmented `.mp4` files are immediately dispatched into the **Google Cloud Storage** bucket to maintain zero footprint loads inside server disk mounts.
+- **httpx Async Layer**: Swapped `requests` with `httpx.AsyncClient` to eliminate synchronous I/O blocking overhead natively Nodes.
+- **asyncio.gather & Semaphore**: Replaced `ThreadPoolExecutor` with **`asyncio.Semaphore(5)`** + **`asyncio.gather`** for nearly zero worker context switching overhead Node.
+- **OAuth Token Caching**: Isolated redundant `credentials.refresh()` inside a memory-buffered **`TokenCacheManager`** isolating authentication latency Node.
+- **Stream Chunking Upload**: Re-engineered `/api/upload` to write iterative **`1MB chunks`** ensuring extreme RAM safety for large video file buffering Node.
 
 ### 5. 🧹 Real-time Vector DB Clear (Clear Database)
 - Supplies an admin-facing maintenance trigger with **`one-click layout buttons`** that completely drops AlloyDB rows and zeroes serve-state caches instantly for prototype-heavy recursions.

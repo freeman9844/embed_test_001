@@ -49,15 +49,53 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# 🛡️ OAuth Token Cache Manager Node Creations
+class TokenCacheManager:
+    def __init__(self):
+        self.credentials = None
+        self.auth_request = None
+        self.token = None
+    
+    def get_token(self) -> str:
+        from google.auth import default
+        from google.auth.transport.requests import Request as AuthRequest
+        from datetime import datetime, timezone, timedelta
+
+        if not self.credentials:
+            self.credentials, _ = default()
+            self.auth_request = AuthRequest()
+
+        now = datetime.now(timezone.utc)
+        expiry = self.credentials.expiry
+        if expiry and expiry.tzinfo is None:
+             expiry = expiry.replace(tzinfo=timezone.utc)
+
+        # Check if invalid or about to expire Node Creations
+        if not self.credentials.valid or (expiry and expiry - now < timedelta(minutes=5)):
+            print("🔄 [Cache] Refreshing Vertex OAuth token...")
+            try:
+                self.credentials.refresh(self.auth_request)
+            except Exception as e:
+                print(f"⚠️ Token Refresh Error: {e}")
+                raise e
+        return self.credentials.token
+
+token_manager = TokenCacheManager()
+
 # 2. Application Setup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize AlloyDB Connection Pool
+    import httpx
     conn_str = "postgresql://postgres:DefaultSearch_1234@34.64.97.194:5432/postgres"
     print("🔌 Initializing AlloyDB Connection Pool...")
     app.state.pool = await asyncpg.create_pool(conn_str, ssl="require", timeout=30, min_size=0, max_size=10)
+    
+    print("🌐 Initializing httpx.AsyncClient...")
+    app.state.httpx_client = httpx.AsyncClient(timeout=60.0)
+    
     yield
-    # Close pool on shutdown
+    # Close pool on shutdown Node Creations
+    await app.state.httpx_client.aclose()
     await app.state.pool.close()
 
 app = FastAPI(title="Video Search with Gemini Embedding 2", lifespan=lifespan)
@@ -68,17 +106,11 @@ templates = Jinja2Templates(directory="app/templates")
 # { "video_id": { "status": "processing", "progress": 0, "logs": [] } }
 process_status: Dict[str, Dict[str, Any]] = {}
 
-def generate_description_rest(gcs_uri: str, model_id="gemini-3.1-flash-lite-preview"):
-    from google.auth import default
-    from google.auth.transport.requests import Request as AuthRequest
-    credentials, _ = default()
-    auth_request = AuthRequest()
-    credentials.refresh(auth_request)
-    token = credentials.token
+async def generate_description_rest(httpx_client, gcs_uri: str, model_id="gemini-3.1-flash-lite-preview"):
+    token = token_manager.get_token()
     project_id = settings.PROJECT_ID
-    # Global Endpoint for preview models
-    url = f"https://aiplatform.googleapis.com/v1/projects/{project_id}/locations/global/publishers/google/models/{model_id}:generateContent"
     
+    url = f"https://aiplatform.googleapis.com/v1/projects/{project_id}/locations/global/publishers/google/models/{model_id}:generateContent"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     payload = {
@@ -87,13 +119,12 @@ def generate_description_rest(gcs_uri: str, model_id="gemini-3.1-flash-lite-prev
             "parts": [
                 {"fileData": {"mimeType": "video/mp4", "fileUri": gcs_uri}},
                 {"text": "이 비디오 클립을 분석하여 묘사적인 한국어(Korean) 설명을 작성하세요.\n\n포함할 요소:\n1. 등장인물의 시각적 행동 및 움직임\n2. 주변 배경, 장소 및 사물의 디테일\n3. 화면에서 시각적으로 유추되는 긴장감이나 분위기\n\n규칙 (매우 중요):\n- '이 영상은', '이 클립은' 등의 불필요한 패키지 도입 어구를 사용하지 말고 바로 사실적 장면 묘사로 시작하세요.\n- 비디오에 나오는 영화 제목이나 브랜드 명칭을 직접 언급하지 마세요.\n- 출력은 200자 내외로 간결하게 한 단락 분량으로 작성하세요.\n- 보이지 않는 가상의 맥락이나 스토리를 지어내서 추측하지 마세요."}
-
-
             ]
         }],
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048}
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=60)
+    
+    response = await httpx_client.post(url, headers=headers, json=payload)
     if response.status_code != 200: 
          raise Exception(f"Generate Error {response.status_code}: {response.text}")
     try:
@@ -153,16 +184,11 @@ def get_vertex_client():
     except Exception as e:
          raise ValueError(f"Failed to initialize GenAI Vertex client: {e}")
 
-def embed_content_rest(content_payload: Dict[str, Any], model_id: str = "gemini-embedding-2-preview"):
+async def embed_content_rest(httpx_client, content_payload: Dict[str, Any], model_id: str = "gemini-embedding-2-preview"):
     """
-    Calls Vertex AI :embedContent REST endpoint directly to bypass SDK bugs.
+    Calls Vertex AI :embedContent REST endpoint directly using Async httpx.
     """
-    credentials, _ = default()
-    auth_request = AuthRequest()
-
-    credentials.refresh(auth_request)
-    token = credentials.token
-
+    token = token_manager.get_token()
     project_id = settings.PROJECT_ID
     location = settings.LOCATION
 
@@ -174,22 +200,20 @@ def embed_content_rest(content_payload: Dict[str, Any], model_id: str = "gemini-
     }
 
     try:
-         response = requests.post(url, headers=headers, json={"content": content_payload}, timeout=60)
+         response = await httpx_client.post(url, headers=headers, json={"content": content_payload})
          if response.status_code != 200:
               raise ValueError(f"Vertex AI (REST) Error {response.status_code}: {response.text}")
          
-         data = response.json()
-         if "embedding" in data and "values" in data["embedding"]:
-              return data["embedding"]["values"]
-         elif "embeddings" in data and len(data["embeddings"]) > 0:
-              # Alternating batch response format check
-              return data["embeddings"][0]["values"] if "values" in data["embeddings"][0] else []
+         res_json = response.json()
+         if 'embeddings' in res_json:
+              return res_json['embeddings']['values']
+         elif 'embedding' in res_json:
+              return res_json['embedding']['values']
          else:
-              raise ValueError(f"Unexpected response format: {data}")
-    except requests.exceptions.Timeout:
-         raise TimeoutError("Vertex AI request timed out")
+              raise ValueError(f"Unrecognized response shape: {res_json}")
+              
     except Exception as e:
-         raise e
+         raise Exception(f"Embed REST Error: {e} | Url: {url}")
 
 # 4. Background Processing Task
 def run_ffmpeg_split(video_path: str, output_pattern: str):
@@ -216,7 +240,7 @@ def run_ffmpeg_split(video_path: str, output_pattern: str):
     except Exception as e:
          raise e
 
-async def process_video_background(video_path: str, video_name: str, video_id: str, client, pool):
+async def process_video_background(video_path: str, video_name: str, video_id: str, client, pool, httpx_client):
     """
     Takes a saved clip, segments it, generates embeddings, and saves to LanceDB.
     """
@@ -243,83 +267,84 @@ async def process_video_background(video_path: str, video_name: str, video_id: s
         data_to_insert = []
         segments_metadata = []
 
-        # Step 2: Gemini Embeddings for each segment (Parallelized)
-        import concurrent.futures
+        import asyncio
+        sem = asyncio.Semaphore(5)
 
-        def process_single_segment(index: int, segment_path: str):
-            start_time = index * 10
-            end_time = (index + 1) * 10
-            try:
-                # 1. Upload segment to GCS first Node creations
-                bucket_name = "jwlee-gcs-video-002"
-                blob_name = f"segments/{video_id}/segment_{index:03d}.mp4"
-                
+        async def process_single_segment(index: int, segment_path: str):
+            async with sem:
+                start_time = index * 10
+                end_time = (index + 1) * 10
                 try:
-                    bucket = storage_client.bucket(bucket_name)
-                    blob = bucket.blob(blob_name)
-                    blob.upload_from_filename(segment_path)
-                except Exception as upload_err:
-                    print(f"GCS Upload Failed for index {index}: {upload_err}")
-                    raise upload_err
+                    # 1. Upload segment to GCS Node creations
+                    bucket_name = "jwlee-gcs-video-002"
+                    blob_name = f"segments/{video_id}/segment_{index:03d}.mp4"
+                    
+                    try:
+                        bucket = storage_client.bucket(bucket_name)
+                        blob = bucket.blob(blob_name)
+                        # Offload Sync upload to thread pool Node creations
+                        await asyncio.to_thread(blob.upload_from_filename, segment_path)
+                    except Exception as upload_err:
+                        print(f"GCS Upload Failed for index {index}: {upload_err}")
+                        raise upload_err
+    
+                    gcs_url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+                    gcs_uri = f"gs://{bucket_name}/{blob_name}"
+    
+                    # 2. Call Vertex AI referencing gcs_uri Node creations
+                    embedding_vector = await embed_content_rest(httpx_client, content_payload={
+                        "parts": [{"fileData": {"mimeType": "video/mp4", "fileUri": gcs_uri}}]
+                    })
+    
+                    description_text = ""
+                    text_vector = [0.0]*3072
+    
+                    if embedding_vector:
+                        description_text = await generate_description_rest(httpx_client, gcs_uri)
+                        if description_text:
+                            text_vector = await embed_content_rest(httpx_client, content_payload={"parts": [{"text": description_text}]})
+    
+                    # Local Cleanup Item Node creations
+                    try: os.remove(segment_path)
+                    except: pass
+    
+                    insert_row = {
+                        "id": str(uuid.uuid4()),
+                        "segment_index": index,
+                        "start_time": float(start_time),
+                        "end_time": float(end_time),
+                        "video_name": video_name,
+                        "embedding": embedding_vector,
+                        "description": description_text if description_text else "",
+                        "text_embedding": text_vector if text_vector else [0.0]*3072,
+                        "url": gcs_url
+                    }
+    
+                    metadata_row = {
+                        "index": index,
+                        "start_time": float(start_time),
+                        "end_time": float(end_time),
+                        "url": gcs_url,
+                        "dimensions": len(embedding_vector) if embedding_vector else 0,
+                        "text_dimensions": len(text_vector) if text_vector else 0,
+                        "description": description_text if description_text else "No description"
+                    }
+                    return {"insert": insert_row, "metadata": metadata_row}
+    
+                except Exception as e:
+                    print(f"Error on segment {index}: {e}")
+                return None
 
-                gcs_url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
-                # fileData uses gs:// string identifiers layout Creations
-                gcs_uri = f"gs://{bucket_name}/{blob_name}"
+        process_status[video_id]["logs"].append("Deploying asyncio.gather for parallel embeddings...")
+        tasks = [process_single_segment(i, p) for i, p in enumerate(segments)]
+        results_gather = await asyncio.gather(*tasks)
 
-                # 2. Call Vertex AI referencing gcs_uri Node creations
-                embedding_vector = embed_content_rest(content_payload={
-                    "parts": [{"fileData": {"mimeType": "video/mp4", "fileUri": gcs_uri}}]
-                })
+        for res in results_gather:
+             if res:
+                  data_to_insert.append(res["insert"])
+                  segments_metadata.append(res["metadata"])
 
-                description_text = ""
-                text_vector = [0.0]*3072
-
-                if embedding_vector:
-                    description_text = generate_description_rest(gcs_uri)
-                    if description_text:
-                        text_vector = embed_content_rest(content_payload={"parts": [{"text": description_text}]})
-
-                # Local Cleanup Item Node creations
-                try: os.remove(segment_path)
-                except: pass
-
-                insert_row = {
-                    "id": str(uuid.uuid4()),
-                    "segment_index": index,
-                    "start_time": float(start_time),
-                    "end_time": float(end_time),
-                    "video_name": video_name,
-                    "embedding": embedding_vector,
-                    "description": description_text if description_text else "",
-                    "text_embedding": text_vector if text_vector else [0.0]*3072,
-                    "url": gcs_url
-                }
-
-                metadata_row = {
-                    "index": index,
-                    "start_time": float(start_time),
-                    "end_time": float(end_time),
-                    "url": gcs_url,
-                    "dimensions": len(embedding_vector),
-                    "text_dimensions": len(text_vector) if text_vector else 0,
-                    "description": description_text if description_text else "No description"
-                }
-                return {"insert": insert_row, "metadata": metadata_row}
-
-            except Exception as e:
-                print(f"Error on segment {index}: {e}")
-            return None
-
-        process_status[video_id]["logs"].append("Deploying parallel execution threads for embeddings...")
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            futures = [executor.submit(process_single_segment, i, p) for i, p in enumerate(segments)]
-            for f in concurrent.futures.as_completed(futures):
-                res = f.result()
-                if res:
-                    data_to_insert.append(res["insert"])
-                    segments_metadata.append(res["metadata"])
-
-        # Sort to preserve exact order layout
+        # Sort to preserve exact order layout Creations
         data_to_insert.sort(key=lambda x: x["segment_index"])
         segments_metadata.sort(key=lambda x: x["index"])
 
@@ -390,9 +415,13 @@ async def upload_video(
     os.makedirs(upload_dir, exist_ok=True)
     video_path = f"{upload_dir}/{video_id}_{video.filename}"
 
-    # Safe save
+    # Safe Stream Chunk Writing Node creations layout Node corrected
     with open(video_path, "wb") as f:
-         f.write(await video.read())
+         while True:
+              chunk = await video.read(1024 * 1024) # 1MB Chunk
+              if not chunk:
+                   break
+              f.write(chunk)
 
     process_status[video_id] = {
          "status": "Queued",
@@ -400,8 +429,8 @@ async def upload_video(
          "logs": ["Upload complete, queuing background task..."]
     }
 
-    # Queue background processing
-    background_tasks.add_task(process_video_background, video_path, video.filename, video_id, client, request.app.state.pool)
+    # Queue background processing Node creations layout
+    background_tasks.add_task(process_video_background, video_path, video.filename, video_id, client, request.app.state.pool, request.app.state.httpx_client)
 
     return JSONResponse(status_code=202, content={
          "status": "Accepted",
@@ -432,8 +461,8 @@ async def sample_video(request: Request, background_tasks: BackgroundTasks):
          "logs": ["Using pre-installed sample video, queuing task..."]
     }
 
-    # Queue background processing
-    background_tasks.add_task(process_video_background, video_path, filename, video_id, client, request.app.state.pool)
+    # Queue background processing Node creations layout
+    background_tasks.add_task(process_video_background, video_path, filename, video_id, client, request.app.state.pool, request.app.state.httpx_client)
 
     return JSONResponse(status_code=202, content={
          "status": "Accepted",
@@ -473,9 +502,9 @@ async def search_index(q: str, request: Request):
          raise HTTPException(status_code=500, detail=str(e))
 
     try:
-         # 2. Embed textual query
-         query_vector = embed_content_rest(content_payload={"parts": [{"text": q}]})
-         text_vector = embed_content_rest(content_payload={"parts": [{"text": q}]})
+         # 2. Embed textual query (Async) Node creations layout Node corrected Node layout Node corrected
+         query_vector = await embed_content_rest(request.app.state.httpx_client, content_payload={"parts": [{"text": q}]})
+         text_vector = await embed_content_rest(request.app.state.httpx_client, content_payload={"parts": [{"text": q}]})
 
          if not query_vector:
              raise HTTPException(status_code=500, detail="Failed to produce query embedding")
@@ -492,16 +521,19 @@ async def search_index(q: str, request: Request):
               single_sql = """
               WITH visual_ranks AS (
                   SELECT id, segment_index, start_time, end_time, video_name, description, url, 
+                         (1.0 - (embedding <=> $1::vector)) as cosine_sim,
                          ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) as rank
                   FROM video_scenes_v4 WHERE id != 'init' ORDER BY embedding <=> $1::vector LIMIT 10
               ),
               text_ranks AS (
                   SELECT id, segment_index, start_time, end_time, video_name, description, url, 
+                         (1.0 - (text_embedding <=> $2::vector)) as cosine_sim,
                          ROW_NUMBER() OVER (ORDER BY text_embedding <=> $2::vector) as rank
                   FROM video_scenes_v4 WHERE id != 'init' AND $2::vector IS NOT NULL ORDER BY text_embedding <=> $2::vector LIMIT 10
               ),
               fts_ranks AS (
                   SELECT id, segment_index, start_time, end_time, video_name, description, url, 
+                         bigm_similarity(description, $3) as bigm_sim,
                          ROW_NUMBER() OVER (ORDER BY bigm_similarity(description, $3) DESC) as rank
                   FROM video_scenes_v4 WHERE id != 'init' AND description LIKE ANY($4::text[])
                   ORDER BY bigm_similarity(description, $3) DESC LIMIT 10
@@ -509,9 +541,15 @@ async def search_index(q: str, request: Request):
               merged_scores AS (
                   SELECT 
                       v.id,
-                      1.25 * COALESCE(1.0 / (vr.rank + 60), 0) + 
-                      1.0 * COALESCE(1.0 / (tr.rank + 60), 0) + 
-                      1.0 * COALESCE(1.0 / (fr.rank + 60), 0) AS rrf_score
+                      -- 🧮 Alpha(0.7) * RRF + Beta(0.3) * Similarity Avg Node Creations
+                      (0.7 * (
+                          1.25 * COALESCE(1.0 / (vr.rank + 60), 0) + 
+                          1.0 * COALESCE(1.0 / (tr.rank + 60), 0) + 
+                          1.0 * COALESCE(1.0 / (fr.rank + 60), 0)
+                      )) + 
+                      (0.3 * (
+                          (COALESCE(vr.cosine_sim, 0.0) + COALESCE(tr.cosine_sim, 0.0) + COALESCE(fr.bigm_sim, 0.0)) / 3.0
+                      )) AS rrf_score
                   FROM video_scenes_v4 v
                   LEFT JOIN visual_ranks vr ON v.id = vr.id
                   LEFT JOIN text_ranks tr ON v.id = tr.id
@@ -565,17 +603,17 @@ async def search_index(q: str, request: Request):
 
          diagnostics = {
               'results_v': [
-                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_v
+                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'score': float(r.get('cosine_sim', 0.0)), 'description': r.get('description','No description')[:80]} for r in results_v
               ] if results_v else [],
               'results_t': [
-                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_t
+                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'score': float(r.get('cosine_sim', 0.0)), 'description': r.get('description','No description')[:80]} for r in results_t
               ] if results_t else [],
               'results_fts': [
-                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'description': r.get('description','No description')[:80]} for r in results_fts
+                   {'segment_index': int(r['segment_index']), 'video_name': r.get('video_name',''), 'score': float(r.get('bigm_sim', 0.0)), 'description': r.get('description','No description')[:80]} for r in results_fts
               ] if results_fts else []
          }
          return {'query': q, 'results': items, 'diagnostics': diagnostics}
 
     except Exception as e:
-         print(f"Search API Error: {repr(e)}")
-         raise HTTPException(status_code=500, detail=repr(e))
+        print(f"Search API Error: {repr(e)}")
+        raise HTTPException(status_code=500, detail=repr(e))
