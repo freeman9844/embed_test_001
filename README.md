@@ -71,65 +71,7 @@ $$\text{RRF Score} = \sum_{e \in \text{Engines}} \frac{\text{Multiplier}_e}{\tex
 
 ---
 
-## ☁️ Google Cloud 배포 아키텍처 (Deployment Architecture)
 
-본 어플리케이션을 **Google Cloud 환경에 상용 배포**할 때 권장되는 엔터프라이즈 아키텍처 모델입니다.
-
-```mermaid
-graph TD
-    classDef gcp fill:#4285F4,stroke:#fff,stroke-width:1px,color:#fff;
-    classDef client fill:#34A853,stroke:#fff,stroke-width:1px,color:#fff;
-    classDef auth fill:#EA4335,stroke:#fff,stroke-width:1px,color:#fff;
-
-    subgraph Client ["🖥️ User Interface"]
-        C([🌐 Web Browser]):::client
-    end
-
-    subgraph GCP ["☁️ Google Cloud Platform"]
-        subgraph Edge [네트워크 외곽]
-            LB([⚖️ Cloud Load Balancing]):::gcp
-            CDN([🚀 Cloud CDN]):::gcp
-        end
-
-        subgraph Compute [컴퓨팅 레이어]
-            CR([🐳 Cloud Run <br> FastAPI Backend]):::gcp
-        end
-
-        subgraph Storage [스토리지 & DB 레이어]
-            GCS[(🗂️ Cloud Storage <br> 분절 비디오 클립/썸네일)]:::gcp
-            ADB[(🛢️ AlloyDB <br> pgvector + pg_bigm)]:::gcp
-        end
-
-        subgraph AI [인공지능 레이어]
-            VAI([🧠 Vertex AI <br> Embedding & Multi-Modal LLM]):::gcp
-        end
-
-        IAM([🔐 Cloud IAM <br> Service Account]):::auth
-    end
-
-    %% Flow
-    C -->|1. HTTPS 접속| LB
-    LB --- CDN
-    LB -->|2. 트래픽 라우팅| CR
-    
-    CR -->|3. 벡터 유사도 검색/RRF| ADB
-    CR -->|4. 임베딩 호출 & 캡셔닝| VAI
-    CR -->|5. 클립 영상 CRUD / 직접 스트리밍| GCS
-    
-    CR -.->|보안 인증| IAM
-```
-
-### 🛠️ 구성요소별 역할 (Role of Components)
-1. **Cloud Load Balancing & CDN**: 
-   - 전 세계 사용자 트래픽을 백엔드로 안전하게 분산하며, 정적 에셋(CSS, JS) 및 반복 로드되는 GCS 비디오 스트림을 캐싱하여 응답 속도를 극대화합니다.
-2. **Cloud Run (Dockerized FastAPI)**:
-   - 서버리스 컴퓨팅 환경으로 배포되어 로드 밸런싱에 맞춰 유연하게 **자동 확장(Auto-scaling)** 됩니다. FFmpeg 가공 작업 등 CPU 부하를 완벽하게 감내합니다.
-3. **AlloyDB (PostgreSQL)**:
-   - 멀티모달 프레임 벡터 연산 및 pg_bigm 형태소 단절 보완 쿼리를 극저레이턴시(Low Latency)로 처리하는 고성능 데이터베이스 거점입니다.
-4. **Vertex AI**:
-   - `gemini-embedding-2-preview` 등을 통한 전처리 임베딩 및 구간 캡셔닝(Description)을 다이렉트 API로 받아보며 인프라 오버헤드를 줄입니다.
-
----
 
 ## ⚙️ 실행 및 배포 가이드 (Getting Started)
 
@@ -208,3 +150,66 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ## 🖼️ 대시보드 샘플 화면 (Dashboard Preview)
 
 ![Dashboard Sample](app/static/images/sample_ui.png)
+
+---
+
+> 💡 **참고 (Reference)** 
+## ☁️ Google Cloud 배포 아키텍처 (Deployment Architecture)
+
+본 어플리케이션을 **Google Cloud 환경에 상용 배포**할 때 권장되는 엔터프라이즈 아키텍처 모델입니다.
+
+```mermaid
+graph TD
+    classDef gcp fill:#4285F4,stroke:#fff,stroke-width:1px,color:#fff;
+    classDef client fill:#34A853,stroke:#fff,stroke-width:1px,color:#fff;
+    classDef auth fill:#EA4335,stroke:#fff,stroke-width:1px,color:#fff;
+
+    subgraph Client ["🖥️ User Interface"]
+        C([🌐 Web Browser]):::client
+    end
+
+    subgraph GCP ["☁️ Google Cloud Platform"]
+        subgraph Edge [네트워크 외곽]
+            LB([⚖️ Cloud Load Balancing]):::gcp
+            CDN([🚀 Cloud CDN]):::gcp
+        end
+
+        subgraph Compute [컴퓨팅 레이어]
+            CR([🐳 Cloud Run <br> FastAPI Backend]):::gcp
+        end
+
+        subgraph Storage [스토리지 & DB 레이어]
+            GCS[(🗂️ Cloud Storage <br> 분절 비디오 클립/썸네일)]:::gcp
+            ADB[(🛢️ AlloyDB <br> pgvector + pg_bigm)]:::gcp
+        end
+
+        subgraph AI [인공지능 레이어]
+            VAI([🧠 Vertex AI <br> Embedding & Multi-Modal LLM]):::gcp
+        end
+
+        IAM([🔐 Cloud IAM <br> Service Account]):::auth
+    end
+
+    %% Flow
+    C -->|1. HTTPS 접속| LB
+    LB --- CDN
+    LB -->|2. 트래픽 라우팅| CR
+    
+    CR -->|3. 벡터 유사도 검색/RRF| ADB
+    CR -->|4. 임베딩 호출 & 캡셔닝| VAI
+    CR -->|5. 클립 영상 CRUD / 직접 스트리밍| GCS
+    
+    CR -.->|보안 인증| IAM
+```
+
+### 🛠️ 구성요소별 역할 (Role of Components)
+1. **Cloud Load Balancing & CDN**: 
+   - 전 세계 사용자 트래픽을 백엔드로 안전하게 분산하며, 정적 에셋(CSS, JS) 및 반복 로드되는 GCS 비디오 스트림을 캐싱하여 응답 속도를 극대화합니다.
+2. **Cloud Run (Dockerized FastAPI)**:
+   - 서버리스 컴퓨팅 환경으로 배포되어 로드 밸런싱에 맞춰 유연하게 **자동 확장(Auto-scaling)** 됩니다. FFmpeg 가공 작업 등 CPU 부하를 완벽하게 감내합니다.
+3. **AlloyDB (PostgreSQL)**:
+   - 멀티모달 프레임 벡터 연산 및 pg_bigm 형태소 단절 보완 쿼리를 극저레이턴시(Low Latency)로 처리하는 고성능 데이터베이스 거점입니다.
+4. **Vertex AI**:
+   - `gemini-embedding-2-preview` 등을 통한 전처리 임베딩 및 구간 캡셔닝(Description)을 다이렉트 API로 받아보며 인프라 오버헤드를 줄입니다.
+
+---
